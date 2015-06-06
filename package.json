@@ -1,0 +1,25 @@
+{
+  "name": "todosapp",
+  "version": "0.0.1",
+  "browserify": {
+    "transform": [
+      "browserify-shim"
+    ]
+  },
+  "browserify-shim": {
+    "lodash": "global:_",
+    "react": "global:React",
+    "react/addons": "global:React"
+  },
+  "dependencies": {
+    "express": "^4.12.4",
+    "lodash": "^3.9.3",
+    "react": "^0.13.3"
+  },
+  "devDependencies": {
+    "browserify": "^10.2.3",
+    "browserify-shim": "^3.8.8",
+    "jshint": "^2.8.0",
+    "minifyify": "^7.0.0"
+  }
+}
