@@ -80,7 +80,7 @@ Collection.prototype = {
     console.assert(_.contains(['$addToSet', '$pull', '$set'], key));
     var opt = opts[key];
     var fields = _.keys(opt);
-    console.assert(keys.length === 1);
+    console.assert(fields.length === 1);
     var field = fields[0];
 
     _.each(vals, function(val) {

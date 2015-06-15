@@ -39,5 +39,3 @@ clean:
 .PHONY: lint
 lint:
 	jshint .
-
-.PHONY: buildgo buildapp build run runapp watchapp gofmt clean lint

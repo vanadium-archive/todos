@@ -43,7 +43,7 @@ var data = [
   }
 ];
 
-var timestamp = (new Date()).getTime();
+var timestamp = Date.now();
 for (var i = 0; i < data.length; i++) {
   var listId = lists.insert({name: data[i].name});
   for (var j = 0; j < data[i].contents.length; j++) {
