@@ -7,11 +7,13 @@
     ]
   },
   "browserify-shim": {
+    "async": "global:async",
     "lodash": "global:_",
     "react": "global:React",
     "react/addons": "global:React"
   },
   "dependencies": {
+    "async": "^1.2.1",
     "express": "^4.12.4",
     "lodash": "^3.9.3",
     "react": "^0.13.3"

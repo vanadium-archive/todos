@@ -7,18 +7,18 @@
 
 var _ = require('lodash');
 var React = require('react');
+var url = require('url');
+var vanadium = require('vanadium');
 
+var defaults = require('./defaults');
 var Dispatcher = require('./dispatcher');
 var h = require('./util').h;
 
 ////////////////////////////////////////
 // Global state
 
-var defaults = require('./defaults');
-var cLists = defaults.lists;
-var cTodos = defaults.todos;
-
-var d = new Dispatcher(cLists, cTodos);
+var cLists, cTodos;  // collections
+var disp;  // dispatcher
 
 ////////////////////////////////////////
 // Helpers
@@ -126,7 +126,7 @@ var Tags = React.createFactory(React.createClass({
             ev.target.parentNode.style.opacity = 0;
             // Wait for CSS animation to finish.
             window.setTimeout(function() {
-              d.removeTag(that.props.todoId, tag);
+              disp.removeTag(that.props.todoId, tag);
             }, 300);
           }
         })
@@ -138,7 +138,7 @@ var Tags = React.createFactory(React.createClass({
         defaultValue: ''
       }, okCancelEvents({
         ok: function(value) {
-          d.addTag(that.props.todoId, value);
+          disp.addTag(that.props.todoId, value);
           that.setState({addingTag: false});
         },
         cancel: function() {
@@ -177,7 +177,7 @@ var Todo = React.createFactory(React.createClass({
         defaultValue: todo.text
       }, okCancelEvents({
         ok: function(value) {
-          d.editTodoText(todo._id, value);
+          disp.editTodoText(todo._id, value);
           that.setState({editingText: false});
         },
         cancel: function() {
@@ -187,7 +187,7 @@ var Todo = React.createFactory(React.createClass({
     } else {
       children.push(h('div.destroy', {
         onClick: function() {
-          d.removeTodo(todo._id);
+          disp.removeTodo(todo._id);
         }
       }));
       children.push(h('div.display', [
@@ -195,7 +195,7 @@ var Todo = React.createFactory(React.createClass({
           type: 'checkbox',
           checked: todo.done,
           onClick: function() {
-            d.markTodoDone(todo._id, !todo.done);
+            disp.markTodoDone(todo._id, !todo.done);
           }
         }),
         h('div.todo-text', {
@@ -233,7 +233,7 @@ var Todos = React.createFactory(React.createClass({
       }, okCancelEvents({
         ok: function(value, ev) {
           var tags = tagFilter ? [tagFilter] : [];
-          d.addTodo(that.props.listId, value, tags);
+          disp.addTodo(that.props.listId, value, tags);
           ev.target.value = '';
         }
       })))));
@@ -265,7 +265,7 @@ var List = React.createFactory(React.createClass({
         defaultValue: list.name
       }, okCancelEvents({
         ok: function(value) {
-          d.editListName(list._id, value);
+          disp.editListName(list._id, value);
           that.setState({editingName: false});
         },
         cancel: function() {
@@ -313,7 +313,7 @@ var Lists = React.createFactory(React.createClass({
         placeholder: 'New list'
       }, okCancelEvents({
         ok: function(value, ev) {
-          var id = d.addList(value);
+          var id = disp.addList(value);
           that.props.setListId(id);
           ev.target.value = '';
         }
@@ -333,14 +333,14 @@ var Page = React.createFactory(React.createClass({
       tagFilter: null  // current tag
     };
   },
-  fetchLists: function() {
-    return cLists.find({}, {sort: {name: 1}});
+  fetchLists_: function(cb) {
+    return cLists.find({}, {sort: {name: 1}}, cb);
   },
-  fetchTodos: function(listId) {
+  fetchTodos_: function(listId, cb) {
     if (listId === null) {
-      return null;
+      return cb();
     }
-    return cTodos.find({listId: listId}, {sort: {timestamp: 1}});
+    return cTodos.find({listId: listId}, {sort: {timestamp: 1}}, cb);
   },
   updateURL: function() {
     var router = this.props.router, listId = this.state.listId;
@@ -348,23 +348,35 @@ var Page = React.createFactory(React.createClass({
   },
   componentDidMount: function() {
     var that = this;
-    var lists = this.fetchLists();
-    var listId = this.state.listId;
-    if (listId === null && lists.length > 0) {
-      listId = lists[0]._id;
-    }
-    this.setState({
-      lists: lists,
-      todos: this.fetchTodos(listId),
-      listId: listId
-    });
-    this.updateURL();
 
     cLists.on('change', function() {
-      that.setState({lists: that.fetchLists()});
+      that.fetchLists_(function(err, lists) {
+        if (err) throw err;
+        that.setState({lists: lists});
+      });
     });
     cTodos.on('change', function() {
-      that.setState({todos: that.fetchTodos(that.state.listId)});
+      that.fetchTodos_(that.state.listId, function(err, todos) {
+        if (err) throw err;
+        that.setState({todos: todos});
+      });
+    });
+
+    that.fetchLists_(function(err, lists) {
+      if (err) throw err;
+      var listId = that.state.listId;
+      if (listId === null && lists.length > 0) {
+        listId = lists[0]._id;
+      }
+      that.fetchTodos_(listId, function(err, todos) {
+        if (err) throw err;
+        that.setState({
+          lists: lists,
+          todos: todos,
+          listId: listId
+        });
+        that.updateURL();
+      });
     });
   },
   componentDidUpdate: function() {
@@ -390,10 +402,13 @@ var Page = React.createFactory(React.createClass({
         listId: this.state.listId,
         setListId: function(listId) {
           if (listId !== that.state.listId) {
-            that.setState({
-              todos: that.fetchTodos(listId),
-              listId: listId,
-              tagFilter: null
+            that.fetchTodos_(listId, function(err, todos) {
+              if (err) throw err;
+              that.setState({
+                todos: todos,
+                listId: listId,
+                tagFilter: null
+              });
             });
           }
         }
@@ -403,24 +418,42 @@ var Page = React.createFactory(React.createClass({
 }));
 
 ////////////////////////////////////////
-// UI initialization
+// Initialization
 
-var Router = Backbone.Router.extend({
-  routes: {
-    '': 'main',
-    'lists/:listId': 'main'
-  }
+var u = url.parse(window.location.href, true);
+var vanadiumConfig = {
+  logLevel: vanadium.vlog.levels.INFO,
+  namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
+  proxy: u.query.proxy
+};
+
+vanadium.init(vanadiumConfig, function(err, rt) {
+  if (err) throw err;
+  var engine = u.query.engine || 'memstore';
+  defaults.initCollections(rt.getContext(), engine, function(err, cxs) {
+    if (err) throw err;
+    cLists = cxs.lists;
+    cTodos = cxs.todos;
+    disp = new Dispatcher(cLists, cTodos);
+
+    var Router = Backbone.Router.extend({
+      routes: {
+        '': 'main',
+        'lists/:listId': 'main'
+      }
+    });
+    var router = new Router();
+
+    var page;
+    router.on('route:main', function(listId) {
+      console.assert(!page);
+      if (listId !== null) {
+        listId = parseInt(listId, 10);
+      }
+      var props = {router: router, initialListId: listId, rt: rt};
+      page = React.render(Page(props), document.getElementById('page'));
+    });
+
+    Backbone.history.start({pushState: true});
+  });
 });
-var router = new Router();
-
-var page;
-router.on('route:main', function(listId) {
-  console.assert(!page);
-  if (listId !== null) {
-    listId = parseInt(listId, 10);
-  }
-  var props = {router: router, initialListId: listId};
-  page = React.render(Page(props), document.getElementById('page'));
-});
-
-Backbone.history.start({pushState: true});

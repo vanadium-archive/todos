@@ -1,9 +1,12 @@
 'use strict';
 
-var Collection = require('./collection');
+var async = require('async');
+var syncbase = require('syncbase');
 
-var lists = new Collection('lists');
-var todos = new Collection('todos');
+var Memstore = require('./memstore');
+var Syncbase = require('./syncbase');
+
+var SYNCBASE_NAME = 'test/syncbased';
 
 // Copied from meteor/todos/server/bootstrap.js.
 var data = [
@@ -43,19 +46,85 @@ var data = [
   }
 ];
 
-var timestamp = Date.now();
-for (var i = 0; i < data.length; i++) {
-  var listId = lists.insert({name: data[i].name});
-  for (var j = 0; j < data[i].contents.length; j++) {
-    var info = data[i].contents[j];
-    todos.insert({listId: listId,
-                  text: info[0],
-                  done: false,
-                  timestamp: timestamp,
-                  tags: info.slice(1)});
-    timestamp += 1;  // ensure unique timestamp
-  }
+function initData(lists, todos, cb) {
+  var timestamp = Date.now();
+  async.each(data, function(list, cb) {
+    lists.insert({name: list.name}, function(err, listId) {
+      if (err) return cb(err);
+      async.each(list.contents, function(info, cb) {
+        timestamp += 1;  // ensure unique timestamp
+        todos.insert({
+          listId: listId,
+          text: info[0],
+          done: false,
+          timestamp: timestamp,
+          tags: info.slice(1)
+        }, cb);
+      }, cb);
+    });
+  }, cb);
 }
 
-exports.lists = lists;
-exports.todos = todos;
+function appExists(ctx, service, name, cb) {
+  service.listApps(ctx, function(err, names) {
+    if (err) return cb(err);
+    return cb(null, names.indexOf(name) >= 0);
+  });
+}
+
+exports.initCollections = function(ctx, engine, cb) {
+  function doInitData(lists, todos, cb) {
+    initData(lists, todos, function(err) {
+      if (err) return cb(err);
+      return cb(null, {
+        lists: lists,
+        todos: todos
+      });
+    });
+  }
+
+  switch (engine) {
+  case 'syncbase':
+    var service = syncbase.newService(SYNCBASE_NAME);
+    appExists(ctx, service, 'todos', function(err, exists) {
+      if (err) return cb(err);
+      var app = service.app('todos'), db = app.noSqlDatabase('db');
+      var lists = new Syncbase(db, 'lists');
+      var todos = new Syncbase(db, 'todos');
+      if (exists) {
+        console.log('app exists; assuming everything has been initialized');
+        return cb(null, {
+          lists: lists,
+          todos: todos
+        });
+      }
+      console.log('app does not exist; initializing everything');
+      app.create(ctx, {}, function(err) {
+        console.log('app.create done');
+        // TODO(sadovsky): This fails with "No usable servers found". Chat with
+        // Nick to determine optimal setup for development and debugging.
+        if (err) return cb(err);
+        var db = app.noSqlDatabase('db');
+        db.create(ctx, {}, function(err) {
+          if (err) return cb(err);
+          async.each(['lists', 'todos'], function(name, cb) {
+            db.createTable(ctx, name, {}, cb);
+          }, function(err) {
+            if (err) return cb(err);
+            var lists = new Syncbase(db, 'lists');
+            var todos = new Syncbase(db, 'todos');
+            doInitData(lists, todos, cb);
+          });
+        });
+      });
+    });
+    break;
+  case 'memstore':
+    var lists = new Memstore('lists');
+    var todos = new Memstore('todos');
+    doInitData(lists, todos, cb);
+    break;
+  default:
+    throw new Error('unknown engine: ' + engine);
+  }
+};

@@ -1,2 +1,4 @@
+go/bin
 node_modules
 public/bundle.*
+tmp
