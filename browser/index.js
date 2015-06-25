@@ -11,14 +11,12 @@ var url = require('url');
 var vanadium = require('vanadium');
 
 var defaults = require('./defaults');
-var Dispatcher = require('./dispatcher');
 var h = require('./util').h;
 
 ////////////////////////////////////////
 // Global state
 
-var cLists, cTodos;  // collections
-var disp;  // dispatcher
+var disp;  // type Dispatcher
 
 ////////////////////////////////////////
 // Helpers
@@ -126,6 +124,8 @@ var Tags = React.createFactory(React.createClass({
             ev.target.parentNode.style.opacity = 0;
             // Wait for CSS animation to finish.
             window.setTimeout(function() {
+              // TODO(sadovsky): If no other todos have the removed tag, set
+              // tagFilter to null.
               disp.removeTag(that.props.todoId, tag);
             }, 300);
           }
@@ -232,8 +232,12 @@ var Todos = React.createFactory(React.createClass({
         placeholder: 'New item'
       }, okCancelEvents({
         ok: function(value, ev) {
-          var tags = tagFilter ? [tagFilter] : [];
-          disp.addTodo(that.props.listId, value, tags);
+          disp.addTodo(that.props.listId, {
+            text: value,
+            tags: tagFilter ? [tagFilter] : [],
+            done: false,
+            timestamp: Date.now()
+          });
           ev.target.value = '';
         }
       })))));
@@ -313,8 +317,9 @@ var Lists = React.createFactory(React.createClass({
         placeholder: 'New list'
       }, okCancelEvents({
         ok: function(value, ev) {
-          var id = disp.addList(value);
-          that.props.setListId(id);
+          disp.addList({name: value}, function(err, listId) {
+            that.props.setListId(listId);
+          });
           ev.target.value = '';
         }
       })))));
@@ -333,14 +338,14 @@ var Page = React.createFactory(React.createClass({
       tagFilter: null  // current tag
     };
   },
-  fetchLists_: function(cb) {
-    return cLists.find({}, {sort: {name: 1}}, cb);
+  getLists_: function(cb) {
+    disp.getLists(cb);
   },
-  fetchTodos_: function(listId, cb) {
+  getTodos_: function(listId, cb) {
     if (listId === null) {
       return cb();
     }
-    return cTodos.find({listId: listId}, {sort: {timestamp: 1}}, cb);
+    disp.getTodos(listId, cb);
   },
   updateURL: function() {
     var router = this.props.router, listId = this.state.listId;
@@ -349,26 +354,27 @@ var Page = React.createFactory(React.createClass({
   componentDidMount: function() {
     var that = this;
 
-    cLists.on('change', function() {
-      that.fetchLists_(function(err, lists) {
+    // TODO(sadovsky): Only update what's needed based on what changed.
+    disp.on('change', function() {
+      that.getLists_(function(err, lists) {
         if (err) throw err;
-        that.setState({lists: lists});
-      });
-    });
-    cTodos.on('change', function() {
-      that.fetchTodos_(that.state.listId, function(err, todos) {
-        if (err) throw err;
-        that.setState({todos: todos});
+        that.getTodos_(that.state.listId, function(err, todos) {
+          if (err) throw err;
+          that.setState({
+            lists: lists,
+            todos: todos
+          });
+        });
       });
     });
 
-    that.fetchLists_(function(err, lists) {
+    that.getLists_(function(err, lists) {
       if (err) throw err;
       var listId = that.state.listId;
       if (listId === null && lists.length > 0) {
         listId = lists[0]._id;
       }
-      that.fetchTodos_(listId, function(err, todos) {
+      that.getTodos_(listId, function(err, todos) {
         if (err) throw err;
         that.setState({
           lists: lists,
@@ -402,7 +408,8 @@ var Page = React.createFactory(React.createClass({
         listId: this.state.listId,
         setListId: function(listId) {
           if (listId !== that.state.listId) {
-            that.fetchTodos_(listId, function(err, todos) {
+            // TODO(sadovsky): Get todos as a separate async step?
+            that.getTodos_(listId, function(err, todos) {
               if (err) throw err;
               that.setState({
                 todos: todos,
@@ -430,11 +437,9 @@ var vanadiumConfig = {
 vanadium.init(vanadiumConfig, function(err, rt) {
   if (err) throw err;
   var engine = u.query.engine || 'memstore';
-  defaults.initCollections(rt.getContext(), engine, function(err, cxs) {
+  defaults.initDispatcher(rt, engine, function(err, resDisp) {
     if (err) throw err;
-    cLists = cxs.lists;
-    cTodos = cxs.todos;
-    disp = new Dispatcher(cLists, cTodos);
+    disp = resDisp;
 
     var Router = Backbone.Router.extend({
       routes: {

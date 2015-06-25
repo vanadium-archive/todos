@@ -1,24 +1,42 @@
 SHELL := /bin/bash -euo pipefail
-export PATH := go/bin:node_modules/.bin:$(V23_ROOT)/release/go/bin:$(V23_ROOT)/roadmap/go/bin:$(V23_ROOT)/third_party/cout/node/bin:$(PATH)
+export PATH := node_modules/.bin:$(V23_ROOT)/release/go/bin:$(V23_ROOT)/roadmap/go/bin:$(V23_ROOT)/third_party/cout/node/bin:$(PATH)
 
+# Default browserify options: use sourcemaps.
+BROWSERIFY_OPTS := --debug
+# Names that should not be mangled by minification.
+RESERVED_NAMES := 'context,ctx,callback,cb,$$stream,serverCall'
+# Don't mangle RESERVED_NAMES, and screw ie8.
+MANGLE_OPTS := --mangle [--except $(RESERVED_NAMES) --screw_ie8]
+# Don't remove unused variables from function arguments, which could mess up
+# signatures. Also don't evaulate constant expressions, since we rely on them to
+# conditionally require modules only in node.
+COMPRESS_OPTS := --compress [--no-unused --no-evaluate]
+# Workaround for Browserify opening too many files: increase the limit on file
+# descriptors.
+# https://github.com/substack/node-browserify/issues/431
+INCREASE_FILE_DESC = ulimit -S -n 2560
+
+# Browserify and extract sourcemap, but do not minify.
 define BROWSERIFY
 	mkdir -p $(dir $2)
-	browserify $1 -d -o $2
+	$(INCREASE_FILE_DESC); \
+	browserify $1 $(BROWSERIFY_OPTS) | exorcist $2.map > $2
 endef
 
+# Browserify, minify, and extract sourcemap.
 define BROWSERIFY_MIN
 	mkdir -p $(dir $2)
-	browserify $1 -d -p [minifyify --map $(notdir $2).map --output $2.map] -o $2
+	$(INCREASE_FILE_DESC); \
+	browserify $1 $(BROWSERIFY_OPTS) --g [uglifyify $(MANGLE_OPTS) $(COMPRESS_OPTS)] | exorcist $2.map > $2
 endef
 
 .DELETE_ON_ERROR:
 
-go/bin: $(shell find $(V23_ROOT) -name "*.go")
+bin: $(shell find $(V23_ROOT) -name "*.go")
 	v23 go build -a -o $@/principal v.io/x/ref/cmd/principal
-	v23 go build -a -tags wspr -o $@/servicerunner v.io/x/ref/cmd/servicerunner
 	v23 go build -a -o $@/syncbased v.io/syncbase/x/ref/services/syncbase/syncbased
 
-node_modules: package.json
+node_modules: package.json $(shell find $(V23_ROOT)/roadmap/javascript/syncbase)
 	npm prune
 	npm install
 	touch $@
@@ -26,8 +44,14 @@ node_modules: package.json
 	rm -rf ./node_modules/{vanadium,syncbase}
 	cd "$(V23_ROOT)/release/javascript/core" && npm link
 	npm link vanadium
+	rm -rf ./node_modules/syncbase
 	cd "$(V23_ROOT)/roadmap/javascript/syncbase" && npm link
 	npm link syncbase
+# Delete syncbase's copy of the vanadium module. If we don't do this, then two
+# copies of vanadium will get bundled, and unfortunately vanadium contains some
+# singletons, which break if there is more than one copy of the module.
+# See https://github.com/vanadium/issues/issues/155
+	rm -rf ./node_modules/syncbase/node_modules/vanadium
 	touch node_modules
 
 public/bundle.min.js: browser/index.js $(shell find browser) node_modules
@@ -38,17 +62,15 @@ else
 endif
 
 .PHONY: build
-build: go/bin node_modules public/bundle.min.js
+build: bin node_modules public/bundle.min.js
 
 .PHONY: serve
-serve: export PATH := test:$(PATH)
 serve: build
-	node ./node_modules/vanadium/test/integration/runner.js --services=start-syncbased.sh -- \
 	npm start
 
 .PHONY: clean
 clean:
-	rm -rf go/bin node_modules public/bundle.min.js
+	rm -rf bin node_modules public/bundle.min.js
 
 .PHONY: lint
 lint:

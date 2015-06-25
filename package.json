@@ -16,12 +16,14 @@
     "async": "^1.2.1",
     "express": "^4.12.4",
     "lodash": "^3.9.3",
+    "node-uuid": "^1.4.3",
     "react": "^0.13.3"
   },
   "devDependencies": {
     "browserify": "^10.2.3",
     "browserify-shim": "^3.8.8",
     "jshint": "^2.8.0",
-    "minifyify": "^7.0.0"
+    "exorcist": "~0.4.0",
+    "uglifyify": "~3.0.1"
   }
 }

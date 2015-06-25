@@ -1,4 +1,5 @@
-// TODO(sadovsky): Use minimongo?
+// In-memory implementation of Collection.
+// TODO(sadovsky): Replace with nedb NPM module.
 
 'use strict';
 
@@ -7,17 +8,20 @@ var inherits = require('util').inherits;
 
 var Collection = require('./collection');
 
-inherits(Memstore, Collection);
-module.exports = Memstore;
+inherits(MemCollection, Collection);
+module.exports = MemCollection;
 
-function Memstore(name) {
+function MemCollection(name) {
   Collection.call(this);
   this.name_ = name;
   this.vals_ = [];
 }
 
-Memstore.prototype.find = function(q, opts, cb) {
+function noop() {}
+
+MemCollection.prototype.find = function(q, opts, cb) {
   var that = this;
+  cb = cb || noop;
   q = this.normalize_(q);
   var res = _.filter(this.vals_, function(v) {
     return that.matches_(v, q);
@@ -33,16 +37,18 @@ Memstore.prototype.find = function(q, opts, cb) {
   return cb(null, _.cloneDeep(res));
 };
 
-Memstore.prototype.insert = function(v, cb) {
-  console.assert(!_.has(v, '_id'));
+MemCollection.prototype.insert = function(v, cb) {
+  cb = cb || noop;
+  console.assert(!v._id);
   v = _.assign({}, v, {_id: this.vals_.length});
   this.vals_.push(v);
   this.emit('change');
   return cb(null, v._id);
 };
 
-Memstore.prototype.remove = function(q, cb) {
+MemCollection.prototype.remove = function(q, cb) {
   var that = this;
+  cb = cb || noop;
   q = this.normalize_(q);
   this.vals_ = _.filter(this.vals_, function(v) {
     return !that.matches_(v, q);
@@ -51,8 +57,9 @@ Memstore.prototype.remove = function(q, cb) {
   return cb();
 };
 
-Memstore.prototype.update = function(q, opts, cb) {
+MemCollection.prototype.update = function(q, opts, cb) {
   var that = this;
+  cb = cb || noop;
   q = this.normalize_(q);
   var vals = _.filter(this.vals_, function(v) {
     return that.matches_(v, q);
@@ -86,14 +93,14 @@ Memstore.prototype.update = function(q, opts, cb) {
   return cb();
 };
 
-Memstore.prototype.normalize_ = function(q) {
+MemCollection.prototype.normalize_ = function(q) {
   if (_.isObject(q)) {
     return q;
   }
   return {_id: q};
 };
 
-Memstore.prototype.matches_ = function(v, q) {
+MemCollection.prototype.matches_ = function(v, q) {
   var keys = _.keys(q);
   for (var i = 0; i < keys.length; i++) {
     var key = keys[i];
