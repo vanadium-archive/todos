@@ -4,7 +4,7 @@
 'use strict';
 
 var _ = require('lodash');
-var inherits = require('util').inherits;
+var inherits = require('inherits');
 
 var Collection = require('./collection');
 
@@ -34,16 +34,21 @@ MemCollection.prototype.find = function(q, opts, cb) {
     console.assert(opts.sort[key] === 1);
     res = _.sortBy(res, key);
   }
-  return cb(null, _.cloneDeep(res));
+  process.nextTick(function() {
+    cb(null, _.cloneDeep(res));
+  });
 };
 
 MemCollection.prototype.insert = function(v, cb) {
+  var that = this;
   cb = cb || noop;
   console.assert(!v._id);
-  v = _.assign({}, v, {_id: this.vals_.length});
+  v = _.assign({}, v, {_id: String(this.vals_.length)});
   this.vals_.push(v);
-  this.emit('change');
-  return cb(null, v._id);
+  process.nextTick(function() {
+    that.emit('change');
+    cb(null, v._id);
+  });
 };
 
 MemCollection.prototype.remove = function(q, cb) {
@@ -53,8 +58,10 @@ MemCollection.prototype.remove = function(q, cb) {
   this.vals_ = _.filter(this.vals_, function(v) {
     return !that.matches_(v, q);
   });
-  this.emit('change');
-  return cb();
+  process.nextTick(function() {
+    that.emit('change');
+    cb();
+  });
 };
 
 MemCollection.prototype.update = function(q, opts, cb) {
@@ -89,8 +96,10 @@ MemCollection.prototype.update = function(q, opts, cb) {
     }
   });
 
-  this.emit('change');
-  return cb();
+  process.nextTick(function() {
+    that.emit('change');
+    cb();
+  });
 };
 
 MemCollection.prototype.normalize_ = function(q) {

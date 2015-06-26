@@ -3,7 +3,7 @@
 'use strict';
 
 var _ = require('lodash');
-var inherits = require('util').inherits;
+var inherits = require('inherits');
 
 var Collection = require('./collection');
 var Dispatcher = require('./dispatcher');

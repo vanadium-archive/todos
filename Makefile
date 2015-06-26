@@ -4,7 +4,7 @@ export PATH := node_modules/.bin:$(V23_ROOT)/release/go/bin:$(V23_ROOT)/roadmap/
 # Default browserify options: use sourcemaps.
 BROWSERIFY_OPTS := --debug
 # Names that should not be mangled by minification.
-RESERVED_NAMES := 'context,ctx,callback,cb,$$stream,serverCall'
+RESERVED_NAMES := "context,ctx,callback,cb,$$stream,serverCall"
 # Don't mangle RESERVED_NAMES, and screw ie8.
 MANGLE_OPTS := --mangle [--except $(RESERVED_NAMES) --screw_ie8]
 # Don't remove unused variables from function arguments, which could mess up
@@ -14,7 +14,15 @@ COMPRESS_OPTS := --compress [--no-unused --no-evaluate]
 # Workaround for Browserify opening too many files: increase the limit on file
 # descriptors.
 # https://github.com/substack/node-browserify/issues/431
-INCREASE_FILE_DESC = ulimit -S -n 2560
+INCREASE_FILE_DESC := ulimit -S -n 2560
+
+# If NOFIND is set, assume that files under V23_ROOT are static. This reduces
+# build time dramatically.
+ifdef NOFIND
+	FIND := true
+else
+	FIND := find
+endif
 
 # Browserify and extract sourcemap, but do not minify.
 define BROWSERIFY
@@ -32,11 +40,11 @@ endef
 
 .DELETE_ON_ERROR:
 
-bin: $(shell find $(V23_ROOT) -name "*.go")
+bin: $(shell $(FIND) $(V23_ROOT) -name "*.go")
 	v23 go build -a -o $@/principal v.io/x/ref/cmd/principal
 	v23 go build -a -o $@/syncbased v.io/syncbase/x/ref/services/syncbase/syncbased
 
-node_modules: package.json $(shell find $(V23_ROOT)/roadmap/javascript/syncbase)
+node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase)
 	npm prune
 	npm install
 	touch $@

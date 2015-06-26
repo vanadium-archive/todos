@@ -6,6 +6,7 @@
 /* jshint newcap: false */
 
 var _ = require('lodash');
+var page = require('page');
 var React = require('react');
 var url = require('url');
 var vanadium = require('vanadium');
@@ -124,10 +125,10 @@ var Tags = React.createFactory(React.createClass({
             ev.target.parentNode.style.opacity = 0;
             // Wait for CSS animation to finish.
             window.setTimeout(function() {
-              // TODO(sadovsky): If no other todos have the removed tag, set
-              // tagFilter to null.
+              // TODO(sadovsky): If no other todos have the removed tag, maybe
+              // set tagFilter to null.
               disp.removeTag(that.props.todoId, tag);
-            }, 300);
+            }, 200);
           }
         })
       ]));
@@ -214,7 +215,7 @@ var Todos = React.createFactory(React.createClass({
   displayName: 'Todos',
   render: function() {
     var that = this;
-    if (this.props.listId === null) {
+    if (!this.props.listId) {
       return null;
     }
     var children = [];
@@ -278,15 +279,15 @@ var List = React.createFactory(React.createClass({
       }))));
     } else {
       child = h('div.display', h('a.list-name' + (list.name ? '' : '.empty'), {
-        href: '/lists/' + list._id
+        href: '/lists/' + list._id,
+        onClick: function(ev) {
+          ev.preventDefault();
+        }
       }, list.name));
     }
     return h('div.list' + (list.selected ? '.selected' : ''), {
       onMouseDown: function() {
         that.props.setListId(list._id);
-      },
-      onClick: function(ev) {
-        ev.preventDefault();  // prevent page refresh
       },
       onDoubleClick: function() {
         that.setState({editingName: true});
@@ -318,6 +319,7 @@ var Lists = React.createFactory(React.createClass({
       }, okCancelEvents({
         ok: function(value, ev) {
           disp.addList({name: value}, function(err, listId) {
+            if (err) throw err;
             that.props.setListId(listId);
           });
           ev.target.value = '';
@@ -325,6 +327,12 @@ var Lists = React.createFactory(React.createClass({
       })))));
     }
     return h('div', children);
+  }
+}));
+
+var DispType = React.createFactory(React.createClass({
+  render: function() {
+    return h('div.disp-type.' + this.props.dispType, this.props.dispType);
   }
 }));
 
@@ -339,31 +347,44 @@ var Page = React.createFactory(React.createClass({
     };
   },
   getLists_: function(cb) {
-    disp.getLists(cb);
+    disp.getLists(function(err, lists) {
+      if (err) return cb(err);
+      // Sort lists by name in the UI.
+      return cb(null, _.sortBy(lists, 'name'));
+    });
   },
   getTodos_: function(listId, cb) {
-    if (listId === null) {
-      return cb();
+    if (!listId) {
+      return process.nextTick(cb);
     }
-    disp.getTodos(listId, cb);
+    disp.getTodos(listId, function(err, todos) {
+      if (err) return cb(err);
+      // Sort todos by timestamp in the UI.
+      return cb(null, _.sortBy(todos, 'timestamp'));
+    });
   },
   updateURL: function() {
-    var router = this.props.router, listId = this.state.listId;
-    router.navigate(listId === null ? '' : '/lists/' + String(listId));
+    var listId = this.state.listId;
+    var pathname = !listId ? '/' : '/lists/' + listId;
+    window.history.replaceState({}, '', pathname + window.location.search);
   },
   componentDidMount: function() {
     var that = this;
 
     // TODO(sadovsky): Only update what's needed based on what changed.
     disp.on('change', function() {
+      var listId = that.state.listId;
       that.getLists_(function(err, lists) {
         if (err) throw err;
-        that.getTodos_(that.state.listId, function(err, todos) {
+        that.getTodos_(listId, function(err, todos) {
           if (err) throw err;
-          that.setState({
-            lists: lists,
-            todos: todos
-          });
+          // TODO(sadovsky): Maybe don't call setState if a newer change has
+          // been observed.
+          var nextState = {lists: lists};
+          if (that.state.listId === listId) {
+            nextState.todos = todos;
+          }
+          that.setState(nextState);
         });
       });
     });
@@ -371,7 +392,8 @@ var Page = React.createFactory(React.createClass({
     that.getLists_(function(err, lists) {
       if (err) throw err;
       var listId = that.state.listId;
-      if (listId === null && lists.length > 0) {
+      if ((!listId || !_.includes(_.pluck(lists, '_id'), listId)) &&
+          lists.length > 0) {
         listId = lists[0]._id;
       }
       that.getTodos_(listId, function(err, todos) {
@@ -381,9 +403,14 @@ var Page = React.createFactory(React.createClass({
           todos: todos,
           listId: listId
         });
-        that.updateURL();
       });
     });
+  },
+  componentWillUpdate: function(nextProps, nextState) {
+    if (false) {
+      console.log(this.props, nextProps);
+      console.log(this.state, nextState);
+    }
   },
   componentDidUpdate: function() {
     this.updateURL();
@@ -391,6 +418,7 @@ var Page = React.createFactory(React.createClass({
   render: function() {
     var that = this;
     return h('div', [
+      DispType({dispType: this.props.dispType}),
       h('div#top-tag-filter', TagFilter({
         todos: this.state.todos,
         tagFilter: this.state.tagFilter,
@@ -408,13 +436,22 @@ var Page = React.createFactory(React.createClass({
         listId: this.state.listId,
         setListId: function(listId) {
           if (listId !== that.state.listId) {
-            // TODO(sadovsky): Get todos as a separate async step?
-            that.getTodos_(listId, function(err, todos) {
-              if (err) throw err;
-              that.setState({
-                todos: todos,
-                listId: listId,
-                tagFilter: null
+            that.setState({
+              todos: null,
+              listId: listId,
+              tagFilter: null
+            }, function() {
+              // Run getTodos_ in the setState callback to ensure that it will
+              // execute after the 'change' event handler executes when a list
+              // is created locally.
+              // TODO(sadovsky): Maybe hold all todos (for all lists) in memory
+              // so that we don't show a brief "loading" message on every list
+              // change.
+              that.getTodos_(listId, function(err, todos) {
+                if (err) throw err;
+                if (listId === that.state.listId) {
+                  that.setState({todos: todos});
+                }
               });
             });
           }
@@ -428,37 +465,50 @@ var Page = React.createFactory(React.createClass({
 // Initialization
 
 var u = url.parse(window.location.href, true);
-var vanadiumConfig = {
-  logLevel: vanadium.vlog.levels.INFO,
-  namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
-  proxy: u.query.proxy
-};
 
-vanadium.init(vanadiumConfig, function(err, rt) {
-  if (err) throw err;
-  var engine = u.query.engine || 'memstore';
-  defaults.initDispatcher(rt, engine, function(err, resDisp) {
+var rc;  // React component
+function render(props) {
+  console.assert(!rc);
+  rc = React.render(Page(props), document.getElementById('page'));
+}
+
+function initDispatcher(dispType, cb) {
+  if (dispType === 'collection') {
+    defaults.initCollectionDispatcher(cb);
+  } else if (dispType === 'syncbase') {
+    var vanadiumConfig = {
+      logLevel: vanadium.vlog.levels.INFO,
+      namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
+      proxy: u.query.proxy
+    };
+    vanadium.init(vanadiumConfig, function(err, rt) {
+      if (err) return cb(err);
+      defaults.initSyncbaseDispatcher(rt, cb);
+    });
+  } else {
+    process.nextTick(function() {
+      cb(new Error('unknown dispType: ' + dispType));
+    });
+  }
+}
+
+function main(ctx) {
+  console.assert(!rc);
+  var dispType = u.query.d || 'collection';
+  var props = {
+    initialListId: ctx.params.listId,
+    dispType: dispType
+  };
+  initDispatcher(dispType, function(err, resDisp) {
     if (err) throw err;
     disp = resDisp;
-
-    var Router = Backbone.Router.extend({
-      routes: {
-        '': 'main',
-        'lists/:listId': 'main'
-      }
+    defaults.initData(disp, function(err) {
+      if (err) throw err;
+      render(props);
     });
-    var router = new Router();
-
-    var page;
-    router.on('route:main', function(listId) {
-      console.assert(!page);
-      if (listId !== null) {
-        listId = parseInt(listId, 10);
-      }
-      var props = {router: router, initialListId: listId, rt: rt};
-      page = React.render(Page(props), document.getElementById('page'));
-    });
-
-    Backbone.history.start({pushState: true});
   });
-});
+}
+
+page('/', main);
+page('/lists/:listId', main);
+page({click: false});

@@ -48,7 +48,7 @@ var data = [
   }
 ];
 
-function initData(disp, cb) {
+exports.initData = function(disp, cb) {
   var timestamp = Date.now();
   async.each(data, function(list, cb) {
     disp.addList({name: list.name}, function(err, listId) {
@@ -64,7 +64,7 @@ function initData(disp, cb) {
       }, cb);
     });
   }, cb);
-}
+};
 
 function newCtx(rt, timeout) {
   timeout = timeout || 5000;
@@ -78,40 +78,36 @@ function appExists(rt, service, name, cb) {
   });
 }
 
-exports.initDispatcher = function(rt, engine, cb) {
-  if (engine === 'syncbase') {
-    var service = syncbase.newService(SYNCBASE_NAME);
-    appExists(rt, service, 'todos', function(err, exists) {
+exports.initSyncbaseDispatcher = function(rt, cb) {
+  var service = syncbase.newService(SYNCBASE_NAME);
+  // TODO(sadovsky): Instead of appExists, simply check for ErrExist in the
+  // app.create response.
+  appExists(rt, service, 'todos', function(err, exists) {
+    if (err) return cb(err);
+    var app = service.app('todos'), db = app.noSqlDatabase('db');
+    var disp = new SyncbaseDispatcher(rt, db);
+    if (exists) {
+      console.log('app exists; assuming everything has been initialized');
+      return cb(null, disp);
+    }
+    console.log('app does not exist; initializing everything');
+    app.create(newCtx(rt), {}, function(err) {
       if (err) return cb(err);
-      var app = service.app('todos'), db = app.noSqlDatabase('db');
-      var disp = new SyncbaseDispatcher(rt, db);
-      if (exists) {
-        console.log('app exists; assuming everything has been initialized');
-        return cb(null, disp);
-      }
-      console.log('app does not exist; initializing everything');
-      app.create(newCtx(rt), {}, function(err) {
+      db.create(newCtx(rt), {}, function(err) {
         if (err) return cb(err);
-        db.create(newCtx(rt), {}, function(err) {
+        db.createTable(newCtx(rt), 'tb', {}, function(err) {
           if (err) return cb(err);
-          db.createTable(newCtx(rt), 'tb', {}, function(err) {
-            if (err) return cb(err);
-            initData(disp, function(err) {
-              if (err) return cb(err);
-              return cb(null, disp);
-            });
-          });
+          return cb(null, disp);
         });
       });
     });
-  } else if (engine === 'memstore') {
-    var lists = new MemCollection('lists'), todos = new MemCollection('todos');
-    var disp = new CollectionDispatcher(lists, todos);
-    initData(disp, function(err) {
-      if (err) return cb(err);
-      return cb(null, disp);
-    });
-  } else {
-    throw new Error('unknown engine: ' + engine);
-  }
+  });
+};
+
+exports.initCollectionDispatcher = function(cb) {
+  var lists = new MemCollection('lists'), todos = new MemCollection('todos');
+  var disp = new CollectionDispatcher(lists, todos);
+  process.nextTick(function() {
+    cb(null, disp);
+  });
 };

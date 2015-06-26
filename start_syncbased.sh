@@ -7,4 +7,4 @@
 # make build
 # ./bin/principal seekblessings --v23.credentials tmp/creds
 
-./bin/syncbased --root-dir=tmp/sbroot --v23.tcp.address=localhost:8200 --v23.credentials=tmp/creds --v=3 --alsologtostderr=true --v23.permissions.literal='{"Admin":{"In":["..."]},"Write":{"In":["..."]},"Read":{"In":["..."]},"Resolve":{"In":["..."]},"Debug":{"In":["..."]}}'
+./bin/syncbased --root-dir=tmp/sbroot --v23.tcp.address=localhost:8200 --v23.credentials=tmp/creds --v23.permissions.literal='{"Admin":{"In":["..."]},"Write":{"In":["..."]},"Read":{"In":["..."]},"Resolve":{"In":["..."]},"Debug":{"In":["..."]}}'

@@ -15,8 +15,11 @@
   "dependencies": {
     "async": "^1.2.1",
     "express": "^4.12.4",
+    "inherits": "^2.0.1",
     "lodash": "^3.9.3",
     "node-uuid": "^1.4.3",
+    "page": "^1.6.3",
+    "randombytes": "^2.0.1",
     "react": "^0.13.3"
   },
   "devDependencies": {

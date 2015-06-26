@@ -3,7 +3,7 @@
 'use strict';
 
 var EventEmitter = require('events').EventEmitter;
-var inherits = require('util').inherits;
+var inherits = require('inherits');
 
 inherits(Collection, EventEmitter);
 module.exports = Collection;

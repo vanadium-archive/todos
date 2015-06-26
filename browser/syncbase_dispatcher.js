@@ -10,8 +10,8 @@
 
 var _ = require('lodash');
 var async = require('async');
-var inherits = require('util').inherits;
-var nodeUuid = require('node-uuid');
+var inherits = require('inherits');
+var randomBytes = require('randombytes');
 
 var syncbase = require('syncbase');
 var nosql = syncbase.nosql;
@@ -42,8 +42,9 @@ function join() {
   return args.join(SEP);
 }
 
-function uuid() {
-  return nodeUuid.v4();
+function uuid(len) {
+  len = len || 16;
+  return randomBytes(Math.ceil(len / 2)).toString('hex').substr(0, len);
 }
 
 function newListKey() {
@@ -86,6 +87,7 @@ SyncbaseDispatcher.prototype.getLists = function(cb) {
 };
 
 SyncbaseDispatcher.prototype.getTodos = function(listId, cb) {
+  // TODO(sadovsky): Specify listId as prefix to getRows_.
   this.getRows_(function(err, rows) {
     if (err) return cb(err);
     var todos = [];
