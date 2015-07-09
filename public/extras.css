@@ -2,15 +2,17 @@
   position: fixed;
   top: 0;
   right: 0;
+  padding: 4px 8px;
+  cursor: pointer;
   color: white;
-  padding: 0 5px;
+  font-weight: bold;
   z-index: 1;
 }
 
+/* https://www.google.com/design/spec/style/color.html */
 .disp-type.collection {
-  background-color: red;
+  background-color: #388e3c;
 }
-
 .disp-type.syncbase {
-  background-color: purple;
+  background-color: #d32f2f;
 }

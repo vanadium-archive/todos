@@ -15,6 +15,12 @@ var defaults = require('./defaults');
 var h = require('./util').h;
 
 ////////////////////////////////////////
+// Constants
+
+var DISP_TYPE_COLLECTION = 'collection';
+var DISP_TYPE_SYNCBASE = 'syncbase';
+
+////////////////////////////////////////
 // Global state
 
 var disp;  // type Dispatcher
@@ -332,7 +338,12 @@ var Lists = React.createFactory(React.createClass({
 
 var DispType = React.createFactory(React.createClass({
   render: function() {
-    return h('div.disp-type.' + this.props.dispType, this.props.dispType);
+    var that = this;
+    return h('div.disp-type.' + this.props.dispType, {
+      onClick: function() {
+        that.props.toggleDispType();
+      }
+    }, this.props.dispType);
   }
 }));
 
@@ -366,6 +377,7 @@ var Page = React.createFactory(React.createClass({
   updateURL: function() {
     var listId = this.state.listId;
     var pathname = !listId ? '/' : '/lists/' + listId;
+    // Note, this doesn't trigger a re-render; it's purely visual.
     window.history.replaceState({}, '', pathname + window.location.search);
   },
   componentDidMount: function() {
@@ -418,7 +430,17 @@ var Page = React.createFactory(React.createClass({
   render: function() {
     var that = this;
     return h('div', [
-      DispType({dispType: this.props.dispType}),
+      DispType({
+        dispType: this.props.dispType,
+        toggleDispType: function() {
+          var newDispType = DISP_TYPE_SYNCBASE;
+          if (that.props.dispType === DISP_TYPE_SYNCBASE) {
+            newDispType = DISP_TYPE_COLLECTION;
+          }
+          // TODO(sadovsky): Retain other query params, namely 'n'.
+          window.location.href = '/?d=' + newDispType;
+        }
+      }),
       h('div#top-tag-filter', TagFilter({
         todos: this.state.todos,
         tagFilter: this.state.tagFilter,
@@ -472,7 +494,7 @@ function render(props) {
   rc = React.render(Page(props), document.getElementById('page'));
 }
 
-function initDispatcher(dispType, cb) {
+function initDispatcher(dispType, syncbaseName, cb) {
   if (dispType === 'collection') {
     defaults.initCollectionDispatcher(cb);
   } else if (dispType === 'syncbase') {
@@ -483,7 +505,7 @@ function initDispatcher(dispType, cb) {
     };
     vanadium.init(vanadiumConfig, function(err, rt) {
       if (err) return cb(err);
-      defaults.initSyncbaseDispatcher(rt, cb);
+      defaults.initSyncbaseDispatcher(rt, syncbaseName, cb);
     });
   } else {
     process.nextTick(function() {
@@ -495,11 +517,13 @@ function initDispatcher(dispType, cb) {
 function main(ctx) {
   console.assert(!rc);
   var dispType = u.query.d || 'collection';
+  var syncbaseName = u.query.n || '/localhost:8200';
   var props = {
     initialListId: ctx.params.listId,
-    dispType: dispType
+    dispType: dispType,
+    syncbaseName: syncbaseName
   };
-  initDispatcher(dispType, function(err, resDisp) {
+  initDispatcher(dispType, syncbaseName, function(err, resDisp) {
     if (err) throw err;
     disp = resDisp;
     defaults.initData(disp, function(err) {

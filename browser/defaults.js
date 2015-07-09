@@ -7,9 +7,6 @@ var CollectionDispatcher = require('./collection_dispatcher');
 var MemCollection = require('./mem_collection');
 var SyncbaseDispatcher = require('./syncbase_dispatcher');
 
-//var SYNCBASE_NAME = 'test/syncbased';
-var SYNCBASE_NAME = '/localhost:8200';
-
 // Copied from meteor/todos/server/bootstrap.js.
 var data = [
   {name: 'Meteor Principles',
@@ -78,8 +75,8 @@ function appExists(rt, service, name, cb) {
   });
 }
 
-exports.initSyncbaseDispatcher = function(rt, cb) {
-  var service = syncbase.newService(SYNCBASE_NAME);
+exports.initSyncbaseDispatcher = function(rt, name, cb) {
+  var service = syncbase.newService(name);
   // TODO(sadovsky): Instead of appExists, simply check for ErrExist in the
   // app.create response.
   appExists(rt, service, 'todos', function(err, exists) {

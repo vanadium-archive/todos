@@ -16,7 +16,7 @@ var randomBytes = require('randombytes');
 var syncbase = require('syncbase');
 var nosql = syncbase.nosql;
 
-var Dispatcher = require('./Dispatcher');
+var Dispatcher = require('./dispatcher');
 
 inherits(SyncbaseDispatcher, Dispatcher);
 module.exports = SyncbaseDispatcher;

@@ -4,13 +4,13 @@ export PATH := node_modules/.bin:$(V23_ROOT)/release/go/bin:$(V23_ROOT)/roadmap/
 # Default browserify options: use sourcemaps.
 BROWSERIFY_OPTS := --debug
 # Names that should not be mangled by minification.
-RESERVED_NAMES := "context,ctx,callback,cb,$$stream,serverCall"
+RESERVED_NAMES := 'context,ctx,callback,cb,$$stream,serverCall'
 # Don't mangle RESERVED_NAMES, and screw ie8.
-MANGLE_OPTS := --mangle [--except $(RESERVED_NAMES) --screw_ie8]
+MANGLE_OPTS := --mangle [ --except $(RESERVED_NAMES) --screw_ie8 ]
 # Don't remove unused variables from function arguments, which could mess up
 # signatures. Also don't evaulate constant expressions, since we rely on them to
 # conditionally require modules only in node.
-COMPRESS_OPTS := --compress [--no-unused --no-evaluate]
+COMPRESS_OPTS := --compress [ --no-unused --no-evaluate ]
 # Workaround for Browserify opening too many files: increase the limit on file
 # descriptors.
 # https://github.com/substack/node-browserify/issues/431
@@ -35,7 +35,7 @@ endef
 define BROWSERIFY_MIN
 	mkdir -p $(dir $2)
 	$(INCREASE_FILE_DESC); \
-	browserify $1 $(BROWSERIFY_OPTS) --g [uglifyify $(MANGLE_OPTS) $(COMPRESS_OPTS)] | exorcist $2.map > $2
+	browserify $1 $(BROWSERIFY_OPTS) --g [ uglifyify $(MANGLE_OPTS) $(COMPRESS_OPTS) ] | exorcist $2.map > $2
 endef
 
 .DELETE_ON_ERROR:
