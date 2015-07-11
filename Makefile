@@ -44,7 +44,7 @@ bin: $(shell $(FIND) $(V23_ROOT) -name "*.go")
 	v23 go build -a -o $@/principal v.io/x/ref/cmd/principal
 	v23 go build -a -o $@/syncbased v.io/syncbase/x/ref/services/syncbase/syncbased
 
-node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase)
+node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase/{package.json,src})
 	npm prune
 	npm install
 	touch $@
@@ -52,14 +52,12 @@ node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncba
 	rm -rf ./node_modules/{vanadium,syncbase}
 	cd "$(V23_ROOT)/release/javascript/core" && npm link
 	npm link vanadium
-	rm -rf ./node_modules/syncbase
 	cd "$(V23_ROOT)/roadmap/javascript/syncbase" && npm link
 	npm link syncbase
-# Delete syncbase's copy of the vanadium module. If we don't do this, then two
-# copies of vanadium will get bundled, and unfortunately vanadium contains some
-# singletons, which break if there is more than one copy of the module.
-# See https://github.com/vanadium/issues/issues/155
-	rm -rf ./node_modules/syncbase/node_modules/vanadium
+# Note, browserify 10.2.5 and up will share the vanadium module instance between
+# todosapp and syncbase, since their node_modules symlinks point to a common
+# location.
+# https://github.com/substack/node-browserify/issues/1063
 	touch node_modules
 
 public/bundle.min.js: browser/index.js $(shell find browser) node_modules

@@ -15,4 +15,6 @@ TMPDIR=${TMPDIR-/tmp}
 
 mkdir -p $TMPDIR
 
-./bin/syncbased --root-dir=${TMPDIR}/syncbase --v23.tcp.address=localhost:8200 --v23.credentials=${TMPDIR}/creds --v23.permissions.literal='{"Admin":{"In":["..."]},"Write":{"In":["..."]},"Read":{"In":["..."]},"Resolve":{"In":["..."]},"Debug":{"In":["..."]}}'
+set -x
+
+./bin/syncbased --root-dir=${TMPDIR}/syncbase --v23.tcp.address=localhost:8200 --v23.credentials=${TMPDIR}/creds --v23.permissions.literal='{"Admin":{"In":["..."]},"Write":{"In":["..."]},"Read":{"In":["..."]},"Resolve":{"In":["..."]},"Debug":{"In":["..."]}}'  # --enable-sync=0

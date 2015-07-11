@@ -45,12 +45,12 @@ var data = [
   }
 ];
 
-exports.initData = function(disp, cb) {
+function initData(disp, cb) {
   var timestamp = Date.now();
   async.each(data, function(list, cb) {
     disp.addList({name: list.name}, function(err, listId) {
       if (err) return cb(err);
-      async.each(list.contents, function(info, cb) {
+      async.eachSeries(list.contents, function(info, cb) {
         timestamp += 1;  // ensure unique timestamp
         disp.addTodo(listId, {
           text: info[0],
@@ -61,40 +61,69 @@ exports.initData = function(disp, cb) {
       }, cb);
     });
   }, cb);
-};
-
-function newCtx(rt, timeout) {
-  timeout = timeout || 5000;
-  return rt.getContext().withTimeout(timeout);
 }
 
-function appExists(rt, service, name, cb) {
-  service.listApps(newCtx(rt), function(err, names) {
+function runBenchmark(disp, cb) {
+  var start = Date.now();
+  async.times(100, function(n, cb) {
+    var key = '' + n + '.' + Date.now();
+    var value = '';
+    console.log('putting ' + key);
+    disp.tb_.put(disp.ctx_, key, value, function(err) {
+      console.log('done putting ' + key);
+      cb(err);
+    });
+  }, function(err) {
+    var end = Date.now();
+    console.log('runBenchmark done, took ' + (end - start) + 'ms');
+    return cb(err);
+  });
+}
+
+// Returns a new Vanadium context object with a timeout.
+function wt(ctx, timeout) {
+  return ctx.withTimeout(timeout || 5000);
+}
+
+function appExists(ctx, service, name, cb) {
+  service.listApps(ctx, function(err, names) {
     if (err) return cb(err);
     return cb(null, names.indexOf(name) >= 0);
   });
 }
 
-exports.initSyncbaseDispatcher = function(rt, name, cb) {
+exports.initSyncbaseDispatcher = function(rt, name, benchmark, cb) {
   var service = syncbase.newService(name);
   // TODO(sadovsky): Instead of appExists, simply check for ErrExist in the
   // app.create response.
-  appExists(rt, service, 'todos', function(err, exists) {
+  var ctx = rt.getContext();
+  appExists(wt(ctx), service, 'todos', function(err, exists) {
     if (err) return cb(err);
     var app = service.app('todos'), db = app.noSqlDatabase('db');
     var disp = new SyncbaseDispatcher(rt, db);
     if (exists) {
       console.log('app exists; assuming everything has been initialized');
+      if (benchmark) {
+        return runBenchmark(disp, cb);
+      }
       return cb(null, disp);
     }
     console.log('app does not exist; initializing everything');
-    app.create(newCtx(rt), {}, function(err) {
+    console.log('-----> creating hierarchy');
+    app.create(wt(ctx), {}, function(err) {
       if (err) return cb(err);
-      db.create(newCtx(rt), {}, function(err) {
+      db.create(wt(ctx), {}, function(err) {
         if (err) return cb(err);
-        db.createTable(newCtx(rt), 'tb', {}, function(err) {
+        db.createTable(wt(ctx), 'tb', {}, function(err) {
           if (err) return cb(err);
-          return cb(null, disp);
+          console.log('-----> hierarchy created; writing rows');
+          if (benchmark) {
+            return runBenchmark(disp, cb);
+          }
+          initData(disp, function(err) {
+            if (err) return cb(err);
+            cb(null, disp);
+          });
         });
       });
     });
@@ -104,7 +133,8 @@ exports.initSyncbaseDispatcher = function(rt, name, cb) {
 exports.initCollectionDispatcher = function(cb) {
   var lists = new MemCollection('lists'), todos = new MemCollection('todos');
   var disp = new CollectionDispatcher(lists, todos);
-  process.nextTick(function() {
+  initData(disp, function(err) {
+    if (err) return cb(err);
     cb(null, disp);
   });
 };

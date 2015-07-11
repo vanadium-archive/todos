@@ -19,6 +19,7 @@ var h = require('./util').h;
 
 var DISP_TYPE_COLLECTION = 'collection';
 var DISP_TYPE_SYNCBASE = 'syncbase';
+var SYNCBASE_NAME = '/localhost:8200';  // default value
 
 ////////////////////////////////////////
 // Global state
@@ -35,9 +36,9 @@ function activateInput(input) {
   input.select();
 }
 
-function okCancelEvents(callbacks) {
-  var ok = callbacks.ok || noop;
-  var cancel = callbacks.cancel || noop;
+function okCancelEvents(cbs) {
+  var ok = cbs.ok || noop;
+  var cancel = cbs.cancel || noop;
   function done(ev) {
     var value = ev.target.value;
     if (value) {
@@ -383,7 +384,8 @@ var Page = React.createFactory(React.createClass({
   componentDidMount: function() {
     var that = this;
 
-    // TODO(sadovsky): Only update what's needed based on what changed.
+    // TODO(sadovsky): Only read (and only update) what's needed based on what
+    // changed.
     disp.on('change', function() {
       var listId = that.state.listId;
       that.getLists_(function(err, lists) {
@@ -437,8 +439,7 @@ var Page = React.createFactory(React.createClass({
           if (that.props.dispType === DISP_TYPE_SYNCBASE) {
             newDispType = DISP_TYPE_COLLECTION;
           }
-          // TODO(sadovsky): Retain other query params, namely 'n'.
-          window.location.href = '/?d=' + newDispType;
+          window.location.href = '/?d=' + newDispType + '&n=' + SYNCBASE_NAME;
         }
       }),
       h('div#top-tag-filter', TagFilter({
@@ -494,8 +495,9 @@ function render(props) {
   rc = React.render(Page(props), document.getElementById('page'));
 }
 
-function initDispatcher(dispType, syncbaseName, cb) {
+function initDispatcher(dispType, syncbaseName, benchmark, cb) {
   if (dispType === 'collection') {
+    console.assert(!benchmark);
     defaults.initCollectionDispatcher(cb);
   } else if (dispType === 'syncbase') {
     var vanadiumConfig = {
@@ -505,7 +507,7 @@ function initDispatcher(dispType, syncbaseName, cb) {
     };
     vanadium.init(vanadiumConfig, function(err, rt) {
       if (err) return cb(err);
-      defaults.initSyncbaseDispatcher(rt, syncbaseName, cb);
+      defaults.initSyncbaseDispatcher(rt, syncbaseName, benchmark, cb);
     });
   } else {
     process.nextTick(function() {
@@ -514,22 +516,27 @@ function initDispatcher(dispType, syncbaseName, cb) {
   }
 }
 
+// Note, ctx here is a Page.js context, not a Vanadium context.
 function main(ctx) {
   console.assert(!rc);
   var dispType = u.query.d || 'collection';
-  var syncbaseName = u.query.n || '/localhost:8200';
+  var syncbaseName = u.query.n || SYNCBASE_NAME;
+  var benchmark = Boolean(u.query.bm);
   var props = {
     initialListId: ctx.params.listId,
     dispType: dispType,
     syncbaseName: syncbaseName
   };
-  initDispatcher(dispType, syncbaseName, function(err, resDisp) {
+  initDispatcher(dispType, syncbaseName, benchmark, function(err, resDisp) {
     if (err) throw err;
+    if (benchmark) {
+      console.log('benchmark done');
+      return;
+    }
     disp = resDisp;
-    defaults.initData(disp, function(err) {
-      if (err) throw err;
-      render(props);
-    });
+    // TODO(sadovsky): initDispatcher with DISP_TYPE_SYNCBASE is slow. We should
+    // show a "loading" message in the UI.
+    render(props);
   });
 }
 

@@ -3,18 +3,21 @@
 // Schema design doc (a bit outdated):
 // https://docs.google.com/document/d/1GtBk75QmjSorUW6T6BATCoiS_LTqOrGksgqjqJ1Hiow/edit#
 //
-// NOTE: Currently, list and todo order are not preserved. We should make the
-// app always order these lexicographically.
+// TODO(sadovsky): Currently, list and todo order are not preserved. We should
+// make the app always order these lexicographically, or better yet, use a
+// Dewey-Decimal-like scheme (with randomization).
 
 'use strict';
 
 var _ = require('lodash');
 var async = require('async');
 var inherits = require('inherits');
+var moment = require('moment');
 var randomBytes = require('randombytes');
-
 var syncbase = require('syncbase');
 var nosql = syncbase.nosql;
+var vanadium = require('vanadium');
+var vtrace = vanadium.vtrace;
 
 var Dispatcher = require('./dispatcher');
 
@@ -24,6 +27,7 @@ module.exports = SyncbaseDispatcher;
 function SyncbaseDispatcher(rt, db) {
   Dispatcher.call(this);
   this.rt_ = rt;
+  this.ctx_ = rt.getContext();
   this.db_ = db;
   this.tb_ = db.table('tb');
 }
@@ -68,12 +72,64 @@ function unmarshal(x) {
 }
 
 ////////////////////////////////////////
+// Vanadium helpers
+
+// Returns a new Vanadium context object with a timeout.
+function wt(ctx, timeout) {
+  return ctx.withTimeout(timeout || 5000);
+}
+
+// Returns a new Vanadium context object with the given name.
+function wn(ctx, name) {
+  return vtrace.withNewSpan(ctx, name);
+}
+
+// Returns a string timestamp, for logging.
+function timestamp(t) {
+  return moment(t || Date.now()).format('hh:mm:ss.SSS');
+}
+
+// Defines a SyncbaseDispatcher method. If the first argument to fn is not a
+// context, creates a new context with a timeout.
+function define(name, fn) {
+  SyncbaseDispatcher.prototype[name] = function() {
+    var args = Array.prototype.slice.call(arguments);
+    var ctx = args[0];
+    if (ctx instanceof vanadium.context.Context) {
+      args.shift();
+    } else {
+      ctx = wt(this.ctx_);
+    }
+    args = [wn(ctx, name)].concat(args);
+    // The callback argument is optional, and clients don't always pass one.
+    if (typeof args[args.length - 1] !== 'function') {
+      args.push(noop);
+    }
+    // Log the invocation.
+    var cb = args[args.length - 1];
+    var start = Date.now();
+    args[args.length - 1] = function() {
+      var end = Date.now();
+      console.log(name + ' done, took ' + (end - start) + 'ms');
+      cb.apply(null, arguments);
+    };
+    // Drop ctx and cb, convert to JSON, drop square brackets.
+    var argsStr = JSON.stringify(args.slice(1, -1)).slice(1, -1);
+    console.log(timestamp(start) + ' ' + name + '(' + argsStr + ')');
+    return fn.apply(this, args);
+  };
+}
+
+////////////////////////////////////////
 // SyncbaseDispatcher impl
 
 // TODO(sadovsky): Switch to storing VDL values (instead of JSON) and use a
 // query to get all values of a particular type.
-SyncbaseDispatcher.prototype.getLists = function(cb) {
-  this.getRows_(function(err, rows) {
+define('getLists', function(ctx, cb) {
+  // NOTE(sadovsky): Storing lists in a separate keyspace from todos and tags
+  // could make this scan faster. But given the size of the data (tiny), it
+  // shouldn't make much difference.
+  this.getRows_(ctx, null, function(err, rows) {
     if (err) return cb(err);
     var lists = [];
     _.forEach(rows, function(row) {
@@ -84,11 +140,10 @@ SyncbaseDispatcher.prototype.getLists = function(cb) {
     });
     return cb(null, lists);
   });
-};
+});
 
-SyncbaseDispatcher.prototype.getTodos = function(listId, cb) {
-  // TODO(sadovsky): Specify listId as prefix to getRows_.
-  this.getRows_(function(err, rows) {
+define('getTodos', function(ctx, listId, cb) {
+  this.getRows_(ctx, listId, function(err, rows) {
     if (err) return cb(err);
     var todos = [];
     var todo = {};
@@ -112,73 +167,89 @@ SyncbaseDispatcher.prototype.getTodos = function(listId, cb) {
     });
     return cb(null, todos);
   });
-};
+});
 
-SyncbaseDispatcher.prototype.addList = function(list, cb) {
+define('addList', function(ctx, list, cb) {
   console.assert(!list._id);
   var listId = newListKey();
   var v = marshal(list);
-  this.tb_.put(this.newCtx_(), listId, v, this.maybeEmit_(function(err) {
+  this.tb_.put(ctx, listId, v, this.maybeEmit_(function(err) {
     if (err) return cb(err);
     return cb(null, listId);
   }));
-};
+});
 
-SyncbaseDispatcher.prototype.editListName = function(listId, name, cb) {
-  this.update_(listId, function(list) {
+define('editListName', function(ctx, listId, name, cb) {
+  this.update_(ctx, listId, function(list) {
     return _.assign(list, {name: name});
   }, cb);
-};
+});
 
-SyncbaseDispatcher.prototype.addTodo = function(listId, todo, cb) {
-  var that = this;
+define('addTodo', function(ctx, listId, todo, cb) {
   console.assert(!todo._id);
+  var that = this;
   var tags = todo.tags;
   delete todo.tags;
   var todoId = newTodoKey(listId);
   var v = marshal(todo);
   // Write todo and tags in a batch.
   var opts = new nosql.BatchOptions();
-  nosql.runInBatch(this.newCtx_(), this.db_, opts, function(db, cb) {
+  nosql.runInBatch(ctx, this.db_, opts, function(db, cb) {
     // NOTE: Dealing with tables is awkward given that batches and syncgroups
     // are database-level. Maybe we should just get rid of tables. Doing so
     // would solve other problems as well, e.g. the API inconsistency for
     // creating databases vs. tables.
     var tb = db.table('tb');
-    tb.put(that.newCtx_(), todoId, v, function(err) {
+    tb.put(wn(ctx, 'put:' + todoId), todoId, v, function(err) {
       if (err) return cb(err);
       async.each(tags, function(tag, cb) {
-        that.addTagInternal_(tb, todoId, tag, cb);
+        that.addTagImpl_(ctx, tb, todoId, tag, cb);
       }, cb);
     });
   }, this.maybeEmit_(cb));
-};
+});
 
-SyncbaseDispatcher.prototype.removeTodo = function(todoId, cb) {
-  this.tb_.row(todoId).delete(this.newCtx_(), this.maybeEmit_(cb));
-};
+define('removeTodo', function(ctx, todoId, cb) {
+  this.tb_.row(todoId).delete(ctx, this.maybeEmit_(cb));
+});
 
-SyncbaseDispatcher.prototype.editTodoText = function(todoId, text, cb) {
-  this.update_(todoId, function(todo) {
+define('editTodoText', function(ctx, todoId, text, cb) {
+  this.update_(ctx, todoId, function(todo) {
     return _.assign(todo, {text: text});
   }, cb);
-};
+});
 
-SyncbaseDispatcher.prototype.markTodoDone = function(todoId, done, cb) {
-  this.update_(todoId, function(todo) {
+define('markTodoDone', function(ctx, todoId, done, cb) {
+  this.update_(ctx, todoId, function(todo) {
     return _.assign(todo, {done: done});
   }, cb);
-};
+});
 
-SyncbaseDispatcher.prototype.addTag = function(todoId, tag, cb) {
-  this.addTagInternal_(this.tb_, todoId, tag, this.maybeEmit_(cb));
-};
+define('addTag', function(ctx, todoId, tag, cb) {
+  this.addTagImpl_(ctx, this.tb_, todoId, tag, this.maybeEmit_(cb));
+});
 
-SyncbaseDispatcher.prototype.removeTag = function(todoId, tag, cb) {
+define('removeTag', function(ctx, todoId, tag, cb) {
   // NOTE: Table.delete is awkward (it takes a range), so instead we use
   // Row.delete. It would be nice for Table.delete to operate on a single row
   // and have a separate Table.deleteRowRange.
-  this.tb_.row(tagKey(todoId, tag)).delete(this.newCtx_(), this.maybeEmit_(cb));
+  this.tb_.row(tagKey(todoId, tag)).delete(ctx, this.maybeEmit_(cb));
+});
+
+// DO NOT USE THIS. vtrace RPCs are extremely slow in JavaScript because VOM
+// decoding is slow for trace records, which are deeply nested. E.g. 100 puts
+// can take 20+ seconds with vtrace vs. 2 seconds without.
+SyncbaseDispatcher.prototype.resetTraceRecords = function() {
+  this.ctx_ = vtrace.withNewStore(this.rt_.getContext());
+  vtrace.getStore(this.ctx_).setCollectRegexp('.*');
+};
+
+SyncbaseDispatcher.prototype.getTraceRecords = function() {
+  return vtrace.getStore(this.ctx_).traceRecords();
+};
+
+SyncbaseDispatcher.prototype.logTraceRecords = function() {
+  console.log(vtrace.formatTraces(this.getTraceRecords()));
 };
 
 // TODO(sadovsky): Watch for changes on Syncbase itself so that we can detect
@@ -192,25 +263,19 @@ SyncbaseDispatcher.prototype.maybeEmit_ = function(cb) {
   };
 };
 
-// Returns a new Vanadium context object with a timeout.
-SyncbaseDispatcher.prototype.newCtx_ = function(timeout) {
-  timeout = timeout || 5000;
-  return this.rt_.getContext().withTimeout(timeout);
-};
-
 // Writes the given tag into the given table.
-SyncbaseDispatcher.prototype.addTagInternal_ = function(tb, todoId, tag, cb) {
+define('addTagImpl_', function(ctx, tb, todoId, tag, cb) {
   // NOTE: Syncbase currently disallows whitespace in keys, so as a quick hack
   // we drop all whitespace before storing tags.
   tag = tag.replace(/\s+/g, '');
-  tb.put(this.newCtx_(), tagKey(todoId, tag), null, cb);
-};
+  tb.put(ctx, tagKey(todoId, tag), null, cb);
+});
 
 // Returns all rows in the table.
-SyncbaseDispatcher.prototype.getRows_ = function(cb) {
+define('getRows_', function(ctx, listId, cb) {
   var rows = [], streamErr = null;
-  var range = nosql.rowrange.prefix('');
-  this.tb_.scan(this.newCtx_(), range, function(err) {
+  var range = nosql.rowrange.prefix(listId || '');
+  this.tb_.scan(ctx, range, function(err) {
     if (err) return cb(err);
     if (streamErr) return cb(streamErr);
     cb(null, rows);
@@ -219,19 +284,18 @@ SyncbaseDispatcher.prototype.getRows_ = function(cb) {
   }).on('error', function(err) {
     streamErr = streamErr || err.error;
   });
-};
+});
 
 // Performs a read-modify-write on key, applying updateFn to the value.
 // Takes care of value marshalling and unmarshalling.
-SyncbaseDispatcher.prototype.update_ = function(key, updateFn, cb) {
-  var that = this;
+define('update_', function(ctx, key, updateFn, cb) {
   var opts = new nosql.BatchOptions();
-  nosql.runInBatch(this.newCtx_(), this.db_, opts, function(db, cb) {
+  nosql.runInBatch(ctx, this.db_, opts, function(db, cb) {
     var tb = db.table('tb');
-    tb.get(that.newCtx_(), key, function(err, value) {
+    tb.get(wn(ctx, 'get:' + key), key, function(err, value) {
       if (err) return cb(err);
       var newValue = marshal(updateFn(unmarshal(value)));
-      tb.put(that.newCtx_(), key, newValue, cb);
+      tb.put(wn(ctx, 'put:' + key), key, newValue, cb);
     });
   }, this.maybeEmit_(cb));
-};
+});

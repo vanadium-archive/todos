@@ -13,7 +13,7 @@ app.use('/public', express.static(pathTo('public')));
 app.use('/third_party', express.static(pathTo('third_party')));
 
 app.get('*', function(req, res) {
-  res.sendFile(pathTo('index.html'));
+  res.sendFile(pathTo('public/index.html'));
 });
 
 var server = app.listen(4000, function() {
