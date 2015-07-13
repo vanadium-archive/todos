@@ -6,19 +6,30 @@
 // TODO(sadovsky): Currently, list and todo order are not preserved. We should
 // make the app always order these lexicographically, or better yet, use a
 // Dewey-Decimal-like scheme (with randomization).
+//
+// NOTE: For now, when an item is deleted, any sub-items that were added
+// concurrently (on some other device) are orphaned. Eventually, we'll GC
+// orphaned records; for now, we don't bother. This orphaning-based approach
+// enables us to use simple last-one-wins conflict resolution for all records
+// stored in Syncbase.
+//
+// TODO(sadovsky): Unfortunately, orphaning degrades performance, because scan
+// RPCs (e.g. scan to get all lists) read (and discard) orphaned records. If we
+// switch from scans to queries, performance should improve since all row
+// filtering will happen on the server side.
 
 'use strict';
 
 var _ = require('lodash');
 var async = require('async');
 var inherits = require('inherits');
-var moment = require('moment');
 var randomBytes = require('randombytes');
 var syncbase = require('syncbase');
 var nosql = syncbase.nosql;
 var vanadium = require('vanadium');
 var vtrace = vanadium.vtrace;
 
+var bm = require('./benchmark');
 var Dispatcher = require('./dispatcher');
 
 inherits(SyncbaseDispatcher, Dispatcher);
@@ -84,11 +95,6 @@ function wn(ctx, name) {
   return vtrace.withNewSpan(ctx, name);
 }
 
-// Returns a string timestamp, for logging.
-function timestamp(t) {
-  return moment(t || Date.now()).format('hh:mm:ss.SSS');
-}
-
 // Defines a SyncbaseDispatcher method. If the first argument to fn is not a
 // context, creates a new context with a timeout.
 function define(name, fn) {
@@ -105,17 +111,10 @@ function define(name, fn) {
     if (typeof args[args.length - 1] !== 'function') {
       args.push(noop);
     }
-    // Log the invocation.
-    var cb = args[args.length - 1];
-    var start = Date.now();
-    args[args.length - 1] = function() {
-      var end = Date.now();
-      console.log(name + ' done, took ' + (end - start) + 'ms');
-      cb.apply(null, arguments);
-    };
     // Drop ctx and cb, convert to JSON, drop square brackets.
+    var cb = args[args.length - 1];
     var argsStr = JSON.stringify(args.slice(1, -1)).slice(1, -1);
-    console.log(timestamp(start) + ' ' + name + '(' + argsStr + ')');
+    args[args.length - 1] = bm.logLatency(name + '(' + argsStr + ')', cb);
     return fn.apply(this, args);
   };
 }
@@ -265,8 +264,8 @@ SyncbaseDispatcher.prototype.maybeEmit_ = function(cb) {
 
 // Writes the given tag into the given table.
 define('addTagImpl_', function(ctx, tb, todoId, tag, cb) {
-  // NOTE: Syncbase currently disallows whitespace in keys, so as a quick hack
-  // we drop all whitespace before storing tags.
+  // TODO(sadovsky): Syncbase currently disallows whitespace in keys, so as a
+  // quick hack we drop all whitespace before storing tags.
   tag = tag.replace(/\s+/g, '');
   tb.put(ctx, tagKey(todoId, tag), null, cb);
 });

@@ -24,6 +24,9 @@ under root directory `$TMPDIR/syncbase`.
 
     TMPDIR=tmp ./tools/start_syncbased.sh
 
+    # Or, start from a clean slate.
+    rm -rf tmp/syncbase* && TMPDIR=tmp ./tools/start_syncbased.sh
+
 Finally, start the web app.
 
     DEBUG=1 make serve
@@ -78,24 +81,29 @@ When changes are received via Syncbase sync, the dispatcher discovers these
 changes (currently via polling; soon, via watch) and emits a `'change'` event,
 triggering the same redraw procedure as described above.
 
-## Resources for debugging
+## Debugging notes
+
+### Links
 
 - https://sites.google.com/a/google.com/v-prod/
 - https://sites.google.com/a/google.com/v-prod/vanadium-services/how-to
 
-### Signature
+### Commands
+
+Signature
 
     $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds signature /localhost:8200
 
-### Method call
+Method call
 
     $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds call /localhost:8200 GetPermissions
+    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds call /localhost:8200/todos/db/tb Scan '""' '""'
 
-### Glob
+Glob
 
     $V23_ROOT/release/go/bin/namespace -v23.credentials=tmp/creds glob "/localhost:8200/..."
 
-### Debug
+Debug
 
     $V23_ROOT/release/go/bin/debug -v23.credentials=tmp/creds glob "/localhost:8200/__debug/stats/rpc/server/routing-id/..."
     $V23_ROOT/release/go/bin/debug -v23.credentials=tmp/creds stats read "/localhost:8200/__debug/stats/rpc/server/routing-id/c61964ab4c72ee522067eb6d5ddd22fc/methods/BeginBatch/latency-ms"
@@ -105,6 +113,7 @@ triggering the same redraw procedure as described above.
 For debugging performance issues, it can be helpful to use the JS integration
 test configuration. To do so, first run the integration test as follows.
 
+    cd $V23_ROOT/roadmap/javascript/syncbase
     NOQUIT=1 NOHEADLESS=1 make test-integration-browser
 
 This command starts a local mount table, identityd, and Syncbase mounted at
@@ -120,14 +129,31 @@ syncbase as follows.
 Visit `http://localhost:4000/?d=syncbase&n=test/syncbased` in the launched
 Chrome instance to talk to your test syncbase.
 
-To run a simple benchmark (100 puts), specify query param `bm=1`.
+To run a simple benchmark (100 puts, followed by a scan of those rows), specify
+query param `bm=1`.
 
-TODO(sadovsky): Understand the following:
-- Why can test browser talk to (run benchmark on) todosapp syncbase and not to
-  test syncbase? This is the opposite of what I'd expect given the blessings.
-- Why does benchmark take 2s on test browser vs. 5.5s on normal browser?
-- Why is scan so slow? (Note, latency appears to be proportional to data size,
-  with some small fixed RPC overhead.)
+### Open questions
+
+- Why can test browser talk to normal syncbase and not to test syncbase? This is
+  the opposite of what I'd expect given the blessings.
+  - Glob from test browser to test syncbase (service.listApps) fails with "does
+    not have Resolve access".
+  - RPCs from test browser to normal syncbase should fail with "untrusted root",
+    but instead they succeed.
+
+- Why do test and normal browsers have different performance talking to the
+  same (normal) syncbase?
+  - Test browser: 100 puts takes 2s, scan takes 3.5s.
+  - Normal browser: 100 puts takes 5s, scan takes 9s.
+
+  With dev console closed, scan takes roughly 0.6s on both (see below), but 100
+  puts still takes 2s in test browser vs. 4s in normal browser.
+
+- Why is JS scan so slow? Note, latency appears to be proportional to data size,
+  with some small fixed overhead. Also note, vrpc scan takes less than 0.3s.
+
+  ANSWER: Turns out if the dev console is closed, scan is much faster (0.6s).
+  Issue filed: https://github.com/vanadium/issues/issues/610
 
 [syncbase]: https://docs.google.com/document/d/12wS_IEPf8HTE7598fcmlN-Y692OWMSneoe2tvyBEpi0/edit#
 [crx]: https://v.io/tools/vanadium-chrome-extension.html

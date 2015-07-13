@@ -44,7 +44,7 @@ bin: $(shell $(FIND) $(V23_ROOT) -name "*.go")
 	v23 go build -a -o $@/principal v.io/x/ref/cmd/principal
 	v23 go build -a -o $@/syncbased v.io/syncbase/x/ref/services/syncbase/syncbased
 
-node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase/{package.json,src})
+node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase/{package.json,src} $(V23_ROOT)/release/javascript/core/{package.json,src})
 	npm prune
 	npm install
 	touch $@

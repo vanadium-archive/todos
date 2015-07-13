@@ -529,10 +529,7 @@ function main(ctx) {
   };
   initDispatcher(dispType, syncbaseName, benchmark, function(err, resDisp) {
     if (err) throw err;
-    if (benchmark) {
-      console.log('benchmark done');
-      return;
-    }
+    if (benchmark) return;
     disp = resDisp;
     // TODO(sadovsky): initDispatcher with DISP_TYPE_SYNCBASE is slow. We should
     // show a "loading" message in the UI.
