@@ -7,6 +7,7 @@ var bm = require('./benchmark');
 var CollectionDispatcher = require('./collection_dispatcher');
 var MemCollection = require('./mem_collection');
 var SyncbaseDispatcher = require('./syncbase_dispatcher');
+var util = require('./util');
 
 // Copied from meteor/todos/server/bootstrap.js.
 var data = [
@@ -90,10 +91,10 @@ exports.initSyncbaseDispatcher = function(rt, name, benchmark, cb) {
       if (benchmark) {
         return bm.runBenchmark(ctx, db, cb);
       }
-      console.log('app exists; assuming everything has been initialized');
+      util.log('app exists; assuming everything has been initialized');
       return cb(null, disp);
     }
-    console.log('app does not exist; initializing everything');
+    util.log('app does not exist; initializing everything');
     app.create(wt(ctx), {}, function(err) {
       if (err) return cb(err);
       db.create(wt(ctx), {}, function(err) {
@@ -103,7 +104,7 @@ exports.initSyncbaseDispatcher = function(rt, name, benchmark, cb) {
           if (benchmark) {
             return bm.runBenchmark(ctx, db, cb);
           }
-          console.log('hierarchy created; writing rows');
+          util.log('hierarchy created; writing rows');
           initData(disp, function(err) {
             if (err) return cb(err);
             cb(null, disp);

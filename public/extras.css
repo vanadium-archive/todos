@@ -1,3 +1,9 @@
+*,
+:before,
+:after {
+  box-sizing: border-box;
+}
+
 .disp-type {
   position: fixed;
   top: 0;
@@ -15,4 +21,34 @@
 }
 .disp-type.syncbase {
   background-color: #673ab7;
+}
+
+#log {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  background-color: #e91e63;
+  font: 400 14px/1.4 monospace;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+#log .msg {
+  display: none;
+}
+
+#log:hover {
+  width: 100%;
+  height: 300px;
+  padding: 16px;
+  background-color: #fff;
+  border-top: 1px solid #000;
+}
+
+#log:hover .msg {
+  display: block;
 }

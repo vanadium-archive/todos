@@ -3,30 +3,23 @@
 'use strict';
 
 var async = require('async');
-var moment = require('moment');
 var syncbase = require('syncbase');
 var nosql = syncbase.nosql;
+
+var util = require('./util');
 
 exports.logLatency = logLatency;
 exports.runBenchmark = runBenchmark;
 
 var LOG_EVERYTHING = false;
 
-// Returns a string timestamp, useful for logging.
-function timestamp(t) {
-  t = t || Date.now();
-  return moment(t).format('HH:mm:ss.SSS');
-}
-
 function logStart(name) {
-  var t = Date.now();
-  console.log(timestamp(t) + ' ' + name + ' start');
-  return t;
+  util.log(name + ' start');
+  return Date.now();
 }
 
 function logStop(name, start) {
-  var t = Date.now();
-  console.log(timestamp(t) + ' ' + name + ' took ' + (t - start) + 'ms');
+  util.log(name + ' took ' + (Date.now() - start) + 'ms');
 }
 
 function logLatency(name, cb) {
@@ -47,15 +40,15 @@ function logLatency(name, cb) {
 // which should create the VC.)
 function doPuts(ctx, tb, n, cb) {
   cb = logLatency('doPuts', cb);
-  var prefix = timestamp() + '.';
+  var prefix = util.timestamp() + '.';
   async.times(100, function(n, cb) {
     // TODO(sadovsky): Remove this once we loosen Syncbase's naming rules.
     prefix = prefix.replace(/:/g, '.');
     var key = prefix + n;
     var value = '';
-    if (LOG_EVERYTHING) console.log('put: ' + key);
+    if (LOG_EVERYTHING) util.log('put: ' + key);
     tb.put(ctx, key, value, function(err) {
-      if (LOG_EVERYTHING) console.log('put done: ' + key);
+      if (LOG_EVERYTHING) util.log('put done: ' + key);
       cb(err);
     });
   }, function(err) {
@@ -70,11 +63,11 @@ function doScan(ctx, tb, prefix, cb) {
   tb.scan(ctx, nosql.rowrange.prefix(prefix), function(err) {
     err = err || streamErr;
     if (err) return cb(err);
-    console.log('scanned ' + bytes + ' bytes');
+    util.log('scanned ' + bytes + ' bytes');
     cb();
   }).on('data', function(row) {
     bytes += row.key.length + row.value.length;
-    if (LOG_EVERYTHING) console.log('scan: ' + JSON.stringify(row));
+    if (LOG_EVERYTHING) util.log('scan: ' + JSON.stringify(row));
   }).on('error', function(err) {
     streamErr = streamErr || err.error;
   });

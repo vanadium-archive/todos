@@ -12,7 +12,8 @@ var url = require('url');
 var vanadium = require('vanadium');
 
 var defaults = require('./defaults');
-var h = require('./util').h;
+var util = require('./util');
+var h = util.h;
 
 ////////////////////////////////////////
 // Constants
@@ -422,8 +423,8 @@ var Page = React.createFactory(React.createClass({
   },
   componentWillUpdate: function(nextProps, nextState) {
     if (false) {
-      console.log(this.props, nextProps);
-      console.log(this.state, nextState);
+      util.log(this.props, nextProps);
+      util.log(this.state, nextState);
     }
   },
   componentDidUpdate: function() {
@@ -487,12 +488,21 @@ var Page = React.createFactory(React.createClass({
 ////////////////////////////////////////
 // Initialization
 
+var logEl = document.querySelector('#log');
+util.addLogger(function() {
+  var msgEl = document.createElement('div');
+  msgEl.className = 'msg';
+  msgEl.innerText = Array.prototype.slice.call(arguments).join(' ');
+  logEl.appendChild(msgEl);
+});
+util.log('starting app');
+
 var u = url.parse(window.location.href, true);
 
 var rc;  // React component
 function render(props) {
   console.assert(!rc);
-  rc = React.render(Page(props), document.getElementById('page'));
+  rc = React.render(Page(props), document.querySelector('#page'));
 }
 
 function initDispatcher(dispType, syncbaseName, benchmark, cb) {

@@ -31,6 +31,7 @@ var vtrace = vanadium.vtrace;
 
 var bm = require('./benchmark');
 var Dispatcher = require('./dispatcher');
+var util = require('./util');
 
 inherits(SyncbaseDispatcher, Dispatcher);
 module.exports = SyncbaseDispatcher;
@@ -248,7 +249,7 @@ SyncbaseDispatcher.prototype.getTraceRecords = function() {
 };
 
 SyncbaseDispatcher.prototype.logTraceRecords = function() {
-  console.log(vtrace.formatTraces(this.getTraceRecords()));
+  util.log(vtrace.formatTraces(this.getTraceRecords()));
 };
 
 // TODO(sadovsky): Watch for changes on Syncbase itself so that we can detect
