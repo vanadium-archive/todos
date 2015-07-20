@@ -1,11 +1,12 @@
-// TODO(sadovsky): Maybe update to the new Meteor Todos UI.
 // https://github.com/meteor/simple-todos
 
 'use strict';
 
 /* jshint newcap: false */
+/* global Mousetrap */
 
 var _ = require('lodash');
+var async = require('async');
 var page = require('page');
 var React = require('react');
 var url = require('url');
@@ -25,12 +26,43 @@ var SYNCBASE_NAME = '/localhost:8200';  // default value
 ////////////////////////////////////////
 // Global state
 
-var disp;  // type Dispatcher
+// Dispatcher, initialized by initDispatcher.
+var disp;
+
+// Used for query params.
+var u = url.parse(window.location.href, true);
 
 ////////////////////////////////////////
 // Helpers
 
 function noop() {}
+
+function initDispatcher(dispType, syncbaseName, benchmark, cb) {
+  var clientCb = cb;
+  cb = function(err, resDisp) {
+    if (err) return clientCb(err);
+    disp = resDisp;
+    clientCb();
+  };
+  if (dispType === 'collection') {
+    console.assert(!benchmark);
+    defaults.initCollectionDispatcher(cb);
+  } else if (dispType === 'syncbase') {
+    var vanadiumConfig = {
+      logLevel: vanadium.vlog.levels.INFO,
+      namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
+      proxy: u.query.proxy
+    };
+    vanadium.init(vanadiumConfig, function(err, rt) {
+      if (err) return cb(err);
+      defaults.initSyncbaseDispatcher(rt, syncbaseName, benchmark, cb);
+    });
+  } else {
+    process.nextTick(function() {
+      cb(new Error('unknown dispType: ' + dispType));
+    });
+  }
+}
 
 function activateInput(input) {
   input.focus();
@@ -40,27 +72,27 @@ function activateInput(input) {
 function okCancelEvents(cbs) {
   var ok = cbs.ok || noop;
   var cancel = cbs.cancel || noop;
-  function done(ev) {
-    var value = ev.target.value;
+  function done(e) {
+    var value = e.target.value;
     if (value) {
-      ok(value, ev);
+      ok(value, e);
     } else {
-      cancel(ev);
+      cancel(e);
     }
   }
   return {
-    onKeyDown: function(ev) {
-      if (ev.which === 27) {  // esc
-        cancel(ev);
+    onKeyDown: function(e) {
+      if (e.which === 27) {  // esc
+        cancel(e);
       }
     },
-    onKeyUp: function(ev) {
-      if (ev.which === 13) {  // enter
-        done(ev);
+    onKeyUp: function(e) {
+      if (e.which === 13) {  // enter
+        done(e);
       }
     },
-    onBlur: function(ev) {
-      done(ev);
+    onBlur: function(e) {
+      done(e);
     }
   };
 }
@@ -68,8 +100,8 @@ function okCancelEvents(cbs) {
 ////////////////////////////////////////
 // Components
 
-var TagFilter = React.createFactory(React.createClass({
-  displayName: 'TagFilter',
+var TagsPane = React.createFactory(React.createClass({
+  displayName: 'TagsPane',
   render: function() {
     var that = this;
     var tagFilter = this.props.tagFilter;
@@ -94,22 +126,23 @@ var TagFilter = React.createFactory(React.createClass({
       count: totalCount,
       selected: tagFilter === null
     });
-    return h('div#tag-filter.tag-list', [
-      h('div.label', 'Show:')
+    return h('div#tags-pane', [
+      h('div.label', {key: 'label'}, 'Show:')
     ].concat(_.map(tagInfos, function(tagInfo) {
-      var count = h('span.count', '(' + tagInfo.count + ')');
+      var count = h('span.count', {key: 'count'}, '(' + tagInfo.count + ')');
       return h('div.tag' + (tagInfo.selected ? '.selected' : ''), {
+        key: 'tag:' + (tagInfo.tag || ''),
         onMouseDown: function() {
           var newTagFilter = tagFilter === tagInfo.tag ? null : tagInfo.tag;
           that.props.setTagFilter(newTagFilter);
         }
-      }, [tagInfo.tag === null ? 'All items' : tagInfo.tag, ' ', count]);
+      }, [(tagInfo.tag || 'All items'), count]);
     })));
   }
 }));
 
-var Tags = React.createFactory(React.createClass({
-  displayName: 'Tags',
+var TodoTags = React.createFactory(React.createClass({
+  displayName: 'TodoTags',
   getInitialState: function() {
     return {
       addingTag: false
@@ -124,25 +157,20 @@ var Tags = React.createFactory(React.createClass({
     var that = this;
     var children = [];
     _.each(this.props.tags, function(tag) {
-      // Note, we must specify the "key" prop so that React doesn't reuse the
-      // opacity=0 node after a tag is removed.
-      children.push(h('div.tag.removable_tag', {key: tag}, [
-        h('div.name', tag),
+      children.push(h('div.tag.removable', {key: tag}, [
+        h('div.name', {key: 'name'}, tag),
         h('div.remove', {
-          onClick: function(ev) {
-            ev.target.parentNode.style.opacity = 0;
-            // Wait for CSS animation to finish.
-            window.setTimeout(function() {
-              // TODO(sadovsky): If no other todos have the removed tag, maybe
-              // set tagFilter to null.
-              disp.removeTag(that.props.todoId, tag);
-            }, 200);
+          key: 'remove',
+          onClick: function(e) {
+            disp.removeTag(that.props.todoId, tag);
           }
         })
       ]));
     });
     if (this.state.addingTag) {
-      children.push(h('div.tag.edittag', h('input#edittag-input', _.assign({
+      children.push(h('div.tag.edittag', {
+        key: 'edittag'
+      }, h('input#edittag-input', _.assign({
         type: 'text',
         defaultValue: ''
       }, okCancelEvents({
@@ -156,6 +184,7 @@ var Tags = React.createFactory(React.createClass({
       })))));
     } else {
       children.push(h('div.tag.addtag', {
+        key: 'addtag',
         onClick: function() {
           that.setState({addingTag: true});
         }
@@ -178,10 +207,12 @@ var Todo = React.createFactory(React.createClass({
     }
   },
   render: function() {
-    var that = this;
-    var todo = this.props.todo, children = [];
-    if (this.state.editingText) {
-      children.push(h('div.edit', h('input#todo-input', _.assign({
+    var that = this, todo = this.props.todo, et = this.state.editingText;
+    var hDescription;
+    if (et) {
+      hDescription = h('div.description', {
+        key: 'description'
+      }, h('input#todo-input', _.assign({
         type: 'text',
         defaultValue: todo.text
       }, okCancelEvents({
@@ -192,67 +223,71 @@ var Todo = React.createFactory(React.createClass({
         cancel: function() {
           that.setState({editingText: false});
         }
-      })))));
+      }))));
     } else {
-      children.push(h('div.destroy', {
+      hDescription = h('div.description', {
+        key: 'description',
+        onDoubleClick: function() {
+          that.setState({editingText: true});
+        }
+      }, todo.text);
+    }
+    var opts = (et ? '.edit' : '') + (todo.done ? '.done' : '');
+    return h('li.todo-row' + opts, [
+      h('div.destroy', {
+        key: 'destroy',
         onClick: function() {
           disp.removeTodo(todo._id);
         }
-      }));
-      children.push(h('div.display', [
-        h('input.check', {
-          type: 'checkbox',
-          checked: todo.done,
-          onClick: function() {
-            disp.markTodoDone(todo._id, !todo.done);
-          }
-        }),
-        h('div.todo-text', {
-          onDoubleClick: function() {
-            that.setState({editingText: true});
-          }
-        }, todo.text)
-      ]));
-    }
-    children.push(Tags({todoId: todo._id, tags: todo.tags}));
-    return h('li.todo' + (todo.done ? '.done' : ''), children);
+      }),
+      h('input.checkbox', {
+        key: 'checkbox',
+        type: 'checkbox',
+        checked: todo.done,
+        onChange: function() {
+          disp.markTodoDone(todo._id, !todo.done);
+        }
+      }),
+      hDescription,
+      TodoTags({key: 'tags', todoId: todo._id, tags: todo.tags})
+    ]);
   }
 }));
 
-var Todos = React.createFactory(React.createClass({
-  displayName: 'Todos',
+var TodosPane = React.createFactory(React.createClass({
+  displayName: 'TodosPane',
   render: function() {
     var that = this;
     if (!this.props.listId) {
       return null;
     }
     var children = [];
-    if (this.props.todos === null) {
-      children.push('Loading...');
+    if (!this.props.todos) {
+      children.push(h('div.loading', {key: 'loading'}, 'Loading...'));
     } else {
       var tagFilter = this.props.tagFilter, items = [];
       _.each(this.props.todos, function(todo) {
         if (tagFilter === null || _.contains(todo.tags, tagFilter)) {
-          items.push(Todo({todo: todo}));
+          items.push(Todo({key: todo._id, todo: todo}));
         }
       });
-      children.push(h('div#new-todo-box', h('input#new-todo', _.assign({
+      children.push(h('div#new-todo', {key: 'new-todo'}, h('input', _.assign({
         type: 'text',
         placeholder: 'New item'
       }, okCancelEvents({
-        ok: function(value, ev) {
+        ok: function(value, e) {
           disp.addTodo(that.props.listId, {
             text: value,
             tags: tagFilter ? [tagFilter] : [],
             done: false,
             timestamp: Date.now()
           });
-          ev.target.value = '';
+          e.target.value = '';
         }
       })))));
-      children.push(h('ul#item-list', items));
+      children.push(h('ul#todo-list', {key: 'todo-list'}, items));
     }
-    return h('div#items-view', children);
+    return h('div#todos-pane', children);
   }
 }));
 
@@ -269,11 +304,13 @@ var List = React.createFactory(React.createClass({
     }
   },
   render: function() {
-    var that = this;
-    var list = this.props.list, child;
+    var that = this, list = this.props.list;
+    var children = [];
     // http://facebook.github.io/react/docs/forms.html#controlled-components
     if (this.state.editingName) {
-      child = h('div.edit', h('input#list-name-input', _.assign({
+      children.push(h('div.edit', {
+        key: 'edit'
+      }, h('input#list-name-input', _.assign({
         type: 'text',
         defaultValue: list.name
       }, okCancelEvents({
@@ -284,14 +321,23 @@ var List = React.createFactory(React.createClass({
         cancel: function() {
           that.setState({editingName: false});
         }
-      }))));
+      })))));
     } else {
-      child = h('div.display', h('a.list-name' + (list.name ? '' : '.empty'), {
-        href: '/lists/' + list._id,
-        onClick: function(ev) {
-          ev.preventDefault();
+      children.push(h('div.status', {
+        key: 'status',
+        onClick: function(e) {
+          e.preventDefault();
+          that.props.showStatusDialog();
         }
-      }, list.name));
+      }, h('div.circle')));
+      children.push(h('div.display', {
+        key: 'display'
+      }, h('a.list-name' + (list.name ? '' : '.empty'), {
+        href: '/lists/' + list._id,
+        onClick: function(e) {
+          e.preventDefault();
+        }
+      }, list.name)));
     }
     return h('div.list' + (list.selected ? '.selected' : ''), {
       onMouseDown: function() {
@@ -300,48 +346,98 @@ var List = React.createFactory(React.createClass({
       onDoubleClick: function() {
         that.setState({editingName: true});
       }
-    }, child);
+    }, children);
   }
 }));
 
-var Lists = React.createFactory(React.createClass({
-  displayName: 'Lists',
+var StatusPane = React.createFactory(React.createClass({
+  displayName: 'StatusPane',
+  componentDidMount: function() {
+    var that = this;
+    Mousetrap.bind('esc', function() {
+      that.props.close();
+    });
+  },
+  componentWillUnmount: function() {
+    Mousetrap.unbind('esc');
+  },
   render: function() {
     var that = this;
-    var children = [h('h3', 'Todo Lists')];
-    if (this.props.lists === null) {
-      children.push(h('div#lists', 'Loading...'));
+    return h('div#status-pane', {
+      onClick: function(e) {
+        if (e.target === e.currentTarget) {
+          that.props.close();
+        }
+      }
+    }, h('div.status-dialog', [
+      // TODO(sadovsky): Add stuff here.
+      h('h4', {key: 'title'}, 'Share with others'),
+      // FIXME: Finish implementing this.
+      h('div.close', {
+        key: 'close',
+        onClick: function() {
+          that.props.close();
+        }
+      })
+    ]));
+  }
+}));
+
+var ListsPane = React.createFactory(React.createClass({
+  displayName: 'ListsPane',
+  getInitialState: function() {
+    return {
+      statusDialog: null  // null or list id
+    };
+  },
+  render: function() {
+    var that = this;
+    var children = [h('div.lists-title', {key: 'title'}, 'Todo Lists')];
+    if (!this.props.lists) {
+      children.push(h('div.loading', {key: 'loading'}, 'Loading...'));
     } else {
       var lists = [];
       _.each(this.props.lists, function(list) {
         list.selected = that.props.listId === list._id;
         lists.push(List({
+          key: list._id,
           list: list,
-          setListId: that.props.setListId
+          setListId: that.props.setListId,
+          showStatusDialog: function() {
+            that.setState({statusDialog: list._id});
+          }
         }));
       });
-      children.push(h('div#lists', lists));
-      children.push(h('div#createList', h('input#new-list', _.assign({
+      children.push(h('div', {key: 'lists'}, lists));
+      children.push(h('div.new-list', {key: 'new-list'}, h('input', _.assign({
         type: 'text',
         placeholder: 'New list'
       }, okCancelEvents({
-        ok: function(value, ev) {
+        ok: function(value, e) {
           disp.addList({name: value}, function(err, listId) {
             if (err) throw err;
             that.props.setListId(listId);
           });
-          ev.target.value = '';
+          e.target.value = '';
         }
       })))));
+      if (this.state.statusDialog) {
+        children.push(StatusPane({
+          key: 'status',
+          close: function() {
+            that.setState({statusDialog: null});
+          }
+        }));
+      }
     }
-    return h('div', children);
+    return h('div#lists-pane', children);
   }
 }));
 
 var DispType = React.createFactory(React.createClass({
   render: function() {
     var that = this;
-    return h('div.disp-type.' + this.props.dispType, {
+    return h('div#disp-type.' + this.props.dispType, {
       onClick: function() {
         that.props.toggleDispType();
       }
@@ -353,8 +449,11 @@ var Page = React.createFactory(React.createClass({
   displayName: 'Page',
   getInitialState: function() {
     return {
-      lists: null,  // all lists
-      todos: null,  // all todos for current listId
+      dispInitialized: false,
+      lists: {seq: 0, items: null},  // all lists
+      todos: {},  // map of listId to {seq, items}
+      // FIXME: Populate and use this.
+      syncgroups: {},  // map of listId to sgInfo
       listId: this.props.initialListId,  // current list
       tagFilter: null  // current tag
     };
@@ -382,58 +481,120 @@ var Page = React.createFactory(React.createClass({
     // Note, this doesn't trigger a re-render; it's purely visual.
     window.history.replaceState({}, '', pathname + window.location.search);
   },
-  componentDidMount: function() {
-    var that = this;
-
-    // TODO(sadovsky): Only read (and only update) what's needed based on what
-    // changed.
-    disp.on('change', function() {
-      var listId = that.state.listId;
-      that.getLists_(function(err, lists) {
-        if (err) throw err;
-        that.getTodos_(listId, function(err, todos) {
-          if (err) throw err;
-          // TODO(sadovsky): Maybe don't call setState if a newer change has
-          // been observed.
-          var nextState = {lists: lists};
-          if (that.state.listId === listId) {
-            nextState.todos = todos;
-          }
-          that.setState(nextState);
-        });
-      });
-    });
-
-    that.getLists_(function(err, lists) {
+  componentWillMount: function() {
+    var that = this, props = this.props;
+    var dt = props.dispType, sn = props.syncbaseName, bm = props.benchmark;
+    initDispatcher(dt, sn, bm, function(err) {
       if (err) throw err;
-      var listId = that.state.listId;
-      if ((!listId || !_.includes(_.pluck(lists, '_id'), listId)) &&
-          lists.length > 0) {
+      that.setState({dispInitialized: true});
+    });
+  },
+  componentDidMount: function() {
+    console.assert(!this.state.dispInitialized);
+  },
+  componentDidUpdate: function(prevProps, prevState) {
+    var that = this;
+    this.updateURL();
+
+    // Only run the code below when disp has just been initialized.
+    if (prevState.dispInitialized || !this.state.dispInitialized) {
+      return;
+    }
+
+    // Returns the list id for the list that should be displayed.
+    function getListId() {
+      var listId = that.state.listId, lists = that.state.lists.items;
+      // If listId refers to an unknown list, set it to null.
+      if (!_.includes(_.pluck(lists, '_id'), listId)) {
+        listId = null;
+      }
+      // If listId is not set, set it to the id of the first list.
+      if (!listId && lists.length > 0) {
         listId = lists[0]._id;
       }
+      return listId;
+    }
+
+    // Updates lists. Calls cb once the setState call has completed.
+    // TODO(sadovsky): If possible, simplify how we deal with concurrent state
+    // updates, here and elsewhere. The current approach is fairly subtle and
+    // error-prone. Our goal is simple: never show stale data, even in the
+    // presence of sync.
+    function updateLists(cb) {
+      var listsSeq = that.state.lists.seq + 1;
+      that.getLists_(function(err, lists) {
+        if (err) return cb(err);
+        // Use setState(cb) form to ensure atomicity.
+        // References: https://goo.gl/CZ82Vp and https://goo.gl/vVCp8B
+        that.setState(function(state) {
+          if (listsSeq <= state.lists.seq) {
+            return {};
+          }
+          return {lists: {seq: listsSeq, items: lists}};
+        }, cb);
+      });
+    }
+
+    // Updates todos for the specified list. Calls cb once the setState call
+    // has completed.
+    function updateTodos(listId, cb) {
+      var stateTodos = that.state.todos[listId];
+      var todosSeq = (stateTodos ? stateTodos.seq : 0) + 1;
       that.getTodos_(listId, function(err, todos) {
+        if (err) return cb(err);
+        // Use setState(cb) form to ensure atomicity.
+        // https://goo.gl/CZ82Vp
+        that.setState(function(state) {
+          var stateTodos = state.todos[listId];
+          if (stateTodos && todosSeq <= stateTodos.seq) {
+            return {};
+          }
+          state.todos[listId] = {seq: todosSeq, items: todos};
+          return {todos: state.todos};
+        }, cb);
+      });
+    }
+
+    // TODO(sadovsky): Only read (and only redraw) what's needed based on what
+    // changed.
+    disp.on('change', function() {
+      updateLists(function(err) {
         if (err) throw err;
-        that.setState({
-          lists: lists,
-          todos: todos,
-          listId: listId
+        var listId = getListId();
+        updateTodos(listId, function(err) {
+          if (err) throw err;
         });
       });
     });
-  },
-  componentWillUpdate: function(nextProps, nextState) {
-    if (false) {
-      util.log(this.props, nextProps);
-      util.log(this.state, nextState);
-    }
-  },
-  componentDidUpdate: function() {
-    this.updateURL();
+
+    // Load initial lists and todos. Note that changes can come in concurrently
+    // via sync.
+    updateLists(function(err) {
+      if (err) throw err;
+      // Set initial listId if needed.
+      var listId = getListId();
+      if (listId !== that.state.listId) {
+        that.setState({listId: listId});
+      }
+      // Get todos for all lists.
+      var listIds = _.pluck(that.state.lists.items, '_id');
+      async.each(listIds, updateTodos, function(err) {
+        if (err) throw err;
+      });
+    });
   },
   render: function() {
+    if (this.props.benchmark) {
+      return null;
+    }
+
     var that = this;
-    return h('div', [
+    var listId = this.state.listId;
+    // If currTodos is {}, todos.items will be undefined, as desired.
+    var currTodos = this.state.todos[listId] || {};
+    return h('div#page-pane', [
       DispType({
+        key: 'DispType',
         dispType: this.props.dispType,
         toggleDispType: function() {
           var newDispType = DISP_TYPE_SYNCBASE;
@@ -443,44 +604,35 @@ var Page = React.createFactory(React.createClass({
           window.location.href = '/?d=' + newDispType + '&n=' + SYNCBASE_NAME;
         }
       }),
-      h('div#top-tag-filter', TagFilter({
-        todos: this.state.todos,
-        tagFilter: this.state.tagFilter,
-        setTagFilter: function(tagFilter) {
-          that.setState({tagFilter: tagFilter});
-        }
-      })),
-      h('div#main-pane', Todos({
-        todos: this.state.todos,
-        listId: this.state.listId,
-        tagFilter: this.state.tagFilter
-      })),
-      h('div#side-pane', Lists({
-        lists: this.state.lists,
-        listId: this.state.listId,
+      ListsPane({
+        key: 'ListsPane',
+        lists: this.state.lists.items,
+        listId: listId,
         setListId: function(listId) {
           if (listId !== that.state.listId) {
             that.setState({
-              todos: null,
               listId: listId,
               tagFilter: null
-            }, function() {
-              // Run getTodos_ in the setState callback to ensure that it will
-              // execute after the 'change' event handler executes when a list
-              // is created locally.
-              // TODO(sadovsky): Maybe hold all todos (for all lists) in memory
-              // so that we don't show a brief "loading" message on every list
-              // change.
-              that.getTodos_(listId, function(err, todos) {
-                if (err) throw err;
-                if (listId === that.state.listId) {
-                  that.setState({todos: todos});
-                }
-              });
             });
           }
         }
-      }))
+      }),
+      h('div#tags-and-todos-pane', {key: 'tags-and-todos-pane'}, [
+        TagsPane({
+          key: 'TagsPane',
+          todos: currTodos.items,
+          tagFilter: this.state.tagFilter,
+          setTagFilter: function(tagFilter) {
+            that.setState({tagFilter: tagFilter});
+          }
+        }),
+        TodosPane({
+          key: 'TodosPane',
+          todos: currTodos.items,
+          listId: listId,
+          tagFilter: this.state.tagFilter
+        })
+      ])
     ]);
   }
 }));
@@ -488,63 +640,36 @@ var Page = React.createFactory(React.createClass({
 ////////////////////////////////////////
 // Initialization
 
+// TODO(sadovsky): Override other console methods and add window.onerror
+// handler.
 var logEl = document.querySelector('#log');
-util.addLogger(function() {
+var consoleLog = console.log.bind(console);
+console.log = function() {
+  var args = [util.timestamp()].concat(Array.prototype.slice.call(arguments));
+  consoleLog.apply(null, args);
   var msgEl = document.createElement('div');
   msgEl.className = 'msg';
-  msgEl.innerText = Array.prototype.slice.call(arguments).join(' ');
+  msgEl.innerText = args.join(' ');
   logEl.appendChild(msgEl);
+  logEl.scrollTop = logEl.scrollHeight;  // scroll to bottom
+};
+
+Mousetrap.bind(['ctrl+l', 'meta+l'], function() {
+  logEl.classList.toggle('visible');
 });
-util.log('starting app');
-
-var u = url.parse(window.location.href, true);
-
-var rc;  // React component
-function render(props) {
-  console.assert(!rc);
-  rc = React.render(Page(props), document.querySelector('#page'));
-}
-
-function initDispatcher(dispType, syncbaseName, benchmark, cb) {
-  if (dispType === 'collection') {
-    console.assert(!benchmark);
-    defaults.initCollectionDispatcher(cb);
-  } else if (dispType === 'syncbase') {
-    var vanadiumConfig = {
-      logLevel: vanadium.vlog.levels.INFO,
-      namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
-      proxy: u.query.proxy
-    };
-    vanadium.init(vanadiumConfig, function(err, rt) {
-      if (err) return cb(err);
-      defaults.initSyncbaseDispatcher(rt, syncbaseName, benchmark, cb);
-    });
-  } else {
-    process.nextTick(function() {
-      cb(new Error('unknown dispType: ' + dispType));
-    });
-  }
-}
 
 // Note, ctx here is a Page.js context, not a Vanadium context.
 function main(ctx) {
-  console.assert(!rc);
   var dispType = u.query.d || 'collection';
   var syncbaseName = u.query.n || SYNCBASE_NAME;
   var benchmark = Boolean(u.query.bm);
   var props = {
     initialListId: ctx.params.listId,
     dispType: dispType,
-    syncbaseName: syncbaseName
+    syncbaseName: syncbaseName,
+    benchmark: benchmark
   };
-  initDispatcher(dispType, syncbaseName, benchmark, function(err, resDisp) {
-    if (err) throw err;
-    if (benchmark) return;
-    disp = resDisp;
-    // TODO(sadovsky): initDispatcher with DISP_TYPE_SYNCBASE is slow. We should
-    // show a "loading" message in the UI.
-    render(props);
-  });
+  React.render(Page(props), document.querySelector('#page'));
 }
 
 page('/', main);

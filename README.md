@@ -38,7 +38,7 @@ Visit `http://localhost:4000` in your browser to access the app.
 By default, the web app will use an in-memory (in-browser-tab) local storage
 engine, and will not talk to Syncbase at all. To configure the app to talk to
 Syncbase, add `d=syncbase` to the url query params, or simply click the storage
-engine indicator in the upper right corner to toggle it.
+engine indicator in the top right corner to toggle it.
 
 When using Syncbase, by default the app attempts to contact the Syncbase service
 using the Vanadium object name `/localhost:8200`. To specify a different name,
@@ -132,28 +132,19 @@ Chrome instance to talk to your test syncbase.
 To run a simple benchmark (100 puts, followed by a scan of those rows), specify
 query param `bm=1`.
 
-### Open questions
+### Benchmark performance
 
-- Why can test browser talk to normal syncbase and not to test syncbase? This is
-  the opposite of what I'd expect given the blessings.
-  - Glob from test browser to test syncbase (service.listApps) fails with "does
-    not have Resolve access".
-  - RPCs from test browser to normal syncbase should fail with "untrusted root",
-    but instead they succeed.
+All numbers assume dev console is closed, and assume non-test setup as described
+above.
 
-- Why do test and normal browsers have different performance talking to the
-  same (normal) syncbase?
-  - Test browser: 100 puts takes 2s, scan takes 3.5s.
-  - Normal browser: 100 puts takes 5s, scan takes 9s.
+Currently, parallel 100 puts takes 4s, and scanning 100 rows takes 0.6s.
 
-  With dev console closed, scan takes roughly 0.6s on both (see below), but 100
-  puts still takes 2s in test browser vs. 4s in normal browser.
+For the puts, avoiding unnecessarily cautious Signature RPC and avoiding 2x
+blowup from unnecessary Resolve calls will help. Parallelism doesn't help as
+much as one would hope, need to understand why.
 
-- Why is JS scan so slow? Note, latency appears to be proportional to data size,
-  with some small fixed overhead. Also note, vrpc scan takes less than 0.3s.
-
-  ANSWER: Turns out if the dev console is closed, scan is much faster (0.6s).
-  Issue filed: https://github.com/vanadium/issues/issues/610
+For the scan, 100ms comes from JS encode/decode, and probably much of the rest
+from WSPR. Needs further digging.
 
 [syncbase]: https://docs.google.com/document/d/12wS_IEPf8HTE7598fcmlN-Y692OWMSneoe2tvyBEpi0/edit#
 [crx]: https://v.io/tools/vanadium-chrome-extension.html

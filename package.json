@@ -24,10 +24,14 @@
     "react": "^0.13.3"
   },
   "devDependencies": {
+    "autoprefixer": "^5.2.0",
     "browserify": "^10.2.6",
     "browserify-shim": "^3.8.9",
+    "cssnano": "^2.1.0",
     "exorcist": "~0.4.0",
     "jshint": "^2.8.0",
+    "less": "^2.5.1",
+    "postcss-cli": "^1.4.0",
     "uglifyify": "~3.0.1"
   }
 }

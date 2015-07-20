@@ -2,12 +2,13 @@
 
 var async = require('async');
 var syncbase = require('syncbase');
+var vanadium = require('vanadium');
+var verror = vanadium.verror;
 
 var bm = require('./benchmark');
 var CollectionDispatcher = require('./collection_dispatcher');
 var MemCollection = require('./mem_collection');
 var SyncbaseDispatcher = require('./syncbase_dispatcher');
-var util = require('./util');
 
 // Copied from meteor/todos/server/bootstrap.js.
 var data = [
@@ -48,11 +49,12 @@ var data = [
 ];
 
 function initData(disp, cb) {
+  cb = bm.logFn('initData', cb);
   var timestamp = Date.now();
   async.each(data, function(list, cb) {
     disp.addList({name: list.name}, function(err, listId) {
       if (err) return cb(err);
-      async.eachSeries(list.contents, function(info, cb) {
+      async.each(list.contents, function(info, cb) {
         timestamp += 1;  // ensure unique timestamp
         disp.addTodo(listId, {
           text: info[0],
@@ -62,7 +64,13 @@ function initData(disp, cb) {
         }, cb);
       }, cb);
     });
-  }, cb);
+  }, function(err) {
+    // NOTE(sadovsky): Based on console logs, it looks like browser async.each
+    // doesn't use process.nextTick for its final callback!
+    process.nextTick(function() {
+      return cb(err);
+    });
+  });
 }
 
 // Returns a new Vanadium context object with a timeout.
@@ -70,45 +78,37 @@ function wt(ctx, timeout) {
   return ctx.withTimeout(timeout || 5000);
 }
 
-function appExists(ctx, service, name, cb) {
-  service.listApps(ctx, function(err, names) {
-    if (err) return cb(err);
-    return cb(null, names.indexOf(name) >= 0);
-  });
-}
-
 exports.initSyncbaseDispatcher = function(rt, name, benchmark, cb) {
-  cb = bm.logLatency('initSyncbaseDispatcher', cb);
-  var service = syncbase.newService(name);
-  // TODO(sadovsky): Instead of appExists, simply check for ErrExist in the
-  // app.create response.
+  cb = bm.logFn('initSyncbaseDispatcher', cb);
   var ctx = rt.getContext();
-  appExists(wt(ctx), service, 'todos', function(err, exists) {
-    if (err) return cb(err);
-    var app = service.app('todos'), db = app.noSqlDatabase('db');
-    var disp = new SyncbaseDispatcher(rt, db);
-    if (exists) {
-      if (benchmark) {
-        return bm.runBenchmark(ctx, db, cb);
+  var service = syncbase.newService(name);
+  var app = service.app('todos'), db = app.noSqlDatabase('db');
+  var disp = new SyncbaseDispatcher(rt, db);
+  // TODO(sadovsky): Check that the VC (and discharge, etc.) for this RPC is
+  // reused for all subsequent RPCs.
+  app.create(wt(ctx), {}, function(err) {
+    if (err) {
+      if (err instanceof verror.ExistError) {
+        if (benchmark) {
+          return bm.runBenchmark(ctx, db, cb);
+        }
+        console.log('app exists; assuming database has been initialized');
+        return cb(null, disp);
       }
-      util.log('app exists; assuming everything has been initialized');
-      return cb(null, disp);
+      return cb(err);
     }
-    util.log('app does not exist; initializing everything');
-    app.create(wt(ctx), {}, function(err) {
+    console.log('app did not exist; initializing database');
+    db.create(wt(ctx), {}, function(err) {
       if (err) return cb(err);
-      db.create(wt(ctx), {}, function(err) {
+      db.createTable(wt(ctx), 'tb', {}, function(err) {
         if (err) return cb(err);
-        db.createTable(wt(ctx), 'tb', {}, function(err) {
+        if (benchmark) {
+          return bm.runBenchmark(ctx, db, cb);
+        }
+        console.log('hierarchy created; writing rows');
+        initData(disp, function(err) {
           if (err) return cb(err);
-          if (benchmark) {
-            return bm.runBenchmark(ctx, db, cb);
-          }
-          util.log('hierarchy created; writing rows');
-          initData(disp, function(err) {
-            if (err) return cb(err);
-            cb(null, disp);
-          });
+          cb(null, disp);
         });
       });
     });
@@ -116,7 +116,7 @@ exports.initSyncbaseDispatcher = function(rt, name, benchmark, cb) {
 };
 
 exports.initCollectionDispatcher = function(cb) {
-  cb = bm.logLatency('initCollectionDispatcher', cb);
+  cb = bm.logFn('initCollectionDispatcher', cb);
   var lists = new MemCollection('lists'), todos = new MemCollection('todos');
   var disp = new CollectionDispatcher(lists, todos);
   initData(disp, function(err) {

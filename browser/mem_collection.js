@@ -27,7 +27,7 @@ MemCollection.prototype.find = function(q, opts, cb) {
     return that.matches_(v, q);
   });
   if (opts.sort) {
-    // TODO(sadovsky): Eliminate simplifying assumptions.
+    // Note, we make various simplifying assumptions.
     var keys = _.keys(opts.sort);
     console.assert(keys.length === 1);
     var key = keys[0];
@@ -72,7 +72,7 @@ MemCollection.prototype.update = function(q, opts, cb) {
     return that.matches_(v, q);
   });
 
-  // TODO(sadovsky): Eliminate simplifying assumptions.
+  // Note, we make various simplifying assumptions.
   var keys = _.keys(opts);
   console.assert(keys.length === 1);
   var key = keys[0];

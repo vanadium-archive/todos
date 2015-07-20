@@ -13,10 +13,10 @@
 // enables us to use simple last-one-wins conflict resolution for all records
 // stored in Syncbase.
 //
-// TODO(sadovsky): Unfortunately, orphaning degrades performance, because scan
-// RPCs (e.g. scan to get all lists) read (and discard) orphaned records. If we
-// switch from scans to queries, performance should improve since all row
-// filtering will happen on the server side.
+// TODO(sadovsky): Orphaning degrades performance, because scan responses (e.g.
+// scan to get all lists) include orphaned records. If we switch from scans to
+// queries, performance should improve since all row filtering will happen
+// server side.
 
 'use strict';
 
@@ -31,7 +31,6 @@ var vtrace = vanadium.vtrace;
 
 var bm = require('./benchmark');
 var Dispatcher = require('./dispatcher');
-var util = require('./util');
 
 inherits(SyncbaseDispatcher, Dispatcher);
 module.exports = SyncbaseDispatcher;
@@ -115,7 +114,7 @@ function define(name, fn) {
     // Drop ctx and cb, convert to JSON, drop square brackets.
     var cb = args[args.length - 1];
     var argsStr = JSON.stringify(args.slice(1, -1)).slice(1, -1);
-    args[args.length - 1] = bm.logLatency(name + '(' + argsStr + ')', cb);
+    args[args.length - 1] = bm.logFn(name + '(' + argsStr + ')', cb);
     return fn.apply(this, args);
   };
 }
@@ -249,7 +248,7 @@ SyncbaseDispatcher.prototype.getTraceRecords = function() {
 };
 
 SyncbaseDispatcher.prototype.logTraceRecords = function() {
-  util.log(vtrace.formatTraces(this.getTraceRecords()));
+  console.log(vtrace.formatTraces(this.getTraceRecords()));
 };
 
 // TODO(sadovsky): Watch for changes on Syncbase itself so that we can detect

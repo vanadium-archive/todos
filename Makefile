@@ -60,6 +60,9 @@ node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncba
 # https://github.com/substack/node-browserify/issues/1063
 	touch node_modules
 
+public/bundle.min.css: $(shell find stylesheets) node_modules
+	lessc -sm=on stylesheets/index.less | postcss -u autoprefixer -u cssnano > $@
+
 public/bundle.min.js: browser/index.js $(shell find browser) node_modules
 ifdef DEBUG
 	$(call BROWSERIFY,$<,$@)
@@ -68,7 +71,7 @@ else
 endif
 
 .PHONY: build
-build: bin node_modules public/bundle.min.js
+build: bin node_modules public/bundle.min.css public/bundle.min.js
 
 .PHONY: serve
 serve: build
@@ -76,7 +79,7 @@ serve: build
 
 .PHONY: clean
 clean:
-	rm -rf bin node_modules public/bundle.min.js
+	rm -rf bin node_modules public/bundle.*
 
 .PHONY: lint
 lint:

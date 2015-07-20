@@ -23,20 +23,7 @@ exports.h = function(selector, props, children) {
 };
 
 // Returns a string timestamp, useful for logging.
-var timestamp = exports.timestamp = function(t) {
+exports.timestamp = function(t) {
   t = t || Date.now();
   return moment(t).format('HH:mm:ss.SSS');
-};
-
-var LOGGERS = [console.log.bind(console)];
-
-exports.addLogger = function(logger) {
-  LOGGERS.push(logger);
-};
-
-exports.log = function() {
-  var args = [timestamp()].concat(Array.prototype.slice.call(arguments));
-  _.forEach(LOGGERS, function(logger) {
-    logger.apply(null, args);
-  });
 };
