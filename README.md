@@ -2,6 +2,8 @@
 
 Todos is an example app that demonstrates use of [Syncbase][syncbase].
 
+Originally based on the [Meteor Todos demo app][meteor-todos].
+
 ## Running the web application
 
 The commands below assume that the current working directory is
@@ -54,14 +56,16 @@ table.
 Todos is implemented as a single-page JavaScript web application that
 communicates with a local Syncbase daemon through the
 [Vanadium Chrome extension][crx]. The app UI is built using HTML and CSS, using
-React as a model-view framework.
+React as a model-view framework. The high-level requirements for this app are
+[described here][requirements].
 
 The Syncbase data layout and conflict resolution scheme for this app are
-[described here][design]. For now, when an item is deleted, any sub-items that
-were added concurrently (on some other device) are orphaned. Eventually, we'll
-GC orphaned records; for now, we don't bother. This orphaning-based approach
-enables us to use simple last-one-wins conflict resolution for all records
-stored in Syncbase.
+[described here][design], and the v0 sync setup is
+[described here][demo-sync-setup]. For now, when an item is deleted, any
+sub-items that were added concurrently (on some other device) are orphaned.
+Eventually, we'll GC orphaned records; for now, we don't bother. This
+orphaning-based approach enables us to use simple last-one-wins conflict
+resolution for all records stored in Syncbase.
 
 At startup, the web app checks whether its backing store (e.g. Syncbase) is
 empty; if so, it writes some todo lists to the store (see
@@ -148,4 +152,7 @@ from WSPR. Needs further digging.
 
 [syncbase]: https://docs.google.com/document/d/12wS_IEPf8HTE7598fcmlN-Y692OWMSneoe2tvyBEpi0/edit#
 [crx]: https://v.io/tools/vanadium-chrome-extension.html
+[requirements]: https://docs.google.com/document/d/13pbomPQu73Nug8RletnbkqXooPtKMCwPKW9cVYQi_jY/edit
 [design]: https://docs.google.com/document/d/1GtBk75QmjSorUW6T6BATCoiS_LTqOrGksgqjqJ1Hiow/edit
+[demo-sync-setup]: https://docs.google.com/document/d/1174a7LIL8jnV1fN174PPV4fO74LGNLi6ODAFEp5l5Rw/edit
+[meteor-todos]: https://github.com/meteor/simple-todos

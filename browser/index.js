@@ -1,5 +1,3 @@
-// https://github.com/meteor/simple-todos
-
 'use strict';
 
 /* jshint newcap: false */
@@ -13,13 +11,13 @@ var url = require('url');
 var vanadium = require('vanadium');
 
 var defaults = require('./defaults');
-var util = require('./util');
-var h = util.h;
+var domLog = require('./dom_log');
+var h = require('./util').h;
 
 ////////////////////////////////////////
 // Constants
 
-var DISP_TYPE_COLLECTION = 'collection';
+var DISP_TYPE_COLLECTION = 'mem-collection';
 var DISP_TYPE_SYNCBASE = 'syncbase';
 var SYNCBASE_NAME = '/localhost:8200';  // default value
 
@@ -44,10 +42,10 @@ function initDispatcher(dispType, syncbaseName, benchmark, cb) {
     disp = resDisp;
     clientCb();
   };
-  if (dispType === 'collection') {
+  if (dispType === DISP_TYPE_COLLECTION) {
     console.assert(!benchmark);
     defaults.initCollectionDispatcher(cb);
-  } else if (dispType === 'syncbase') {
+  } else if (dispType === DISP_TYPE_SYNCBASE) {
     var vanadiumConfig = {
       logLevel: vanadium.vlog.levels.INFO,
       namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
@@ -69,7 +67,7 @@ function activateInput(input) {
   input.select();
 }
 
-function okCancelEvents(cbs) {
+function okCancelEvents(cbs, cancelOnBlur) {
   var ok = cbs.ok || noop;
   var cancel = cbs.cancel || noop;
   function done(e) {
@@ -92,7 +90,11 @@ function okCancelEvents(cbs) {
       }
     },
     onBlur: function(e) {
-      done(e);
+      if (cancelOnBlur) {
+        cancel(e);
+      } else {
+        done(e);
+      }
     }
   };
 }
@@ -108,9 +110,7 @@ var TagsPane = React.createFactory(React.createClass({
     var tagInfos = [], totalCount = 0;
     _.each(this.props.todos, function(todo) {
       _.each(todo.tags, function(tag) {
-        var tagInfo = _.find(tagInfos, function(x) {
-          return x.tag === tag;
-        });
+        var tagInfo = _.find(tagInfos, {tag: tag});
         if (!tagInfo) {
           tagInfos.push({tag: tag, count: 1, selected: tagFilter === tag});
         } else {
@@ -132,7 +132,7 @@ var TagsPane = React.createFactory(React.createClass({
       var count = h('span.count', {key: 'count'}, '(' + tagInfo.count + ')');
       return h('div.tag' + (tagInfo.selected ? '.selected' : ''), {
         key: 'tag:' + (tagInfo.tag || ''),
-        onMouseDown: function() {
+        onClick: function() {
           var newTagFilter = tagFilter === tagInfo.tag ? null : tagInfo.tag;
           that.props.setTagFilter(newTagFilter);
         }
@@ -258,11 +258,8 @@ var TodosPane = React.createFactory(React.createClass({
   displayName: 'TodosPane',
   render: function() {
     var that = this;
-    if (!this.props.listId) {
-      return null;
-    }
     var children = [];
-    if (!this.props.todos) {
+    if (!this.props.listId || !this.props.todos) {
       children.push(h('div.loading', {key: 'loading'}, 'Loading...'));
     } else {
       var tagFilter = this.props.tagFilter, items = [];
@@ -323,13 +320,15 @@ var List = React.createFactory(React.createClass({
         }
       })))));
     } else {
-      children.push(h('div.status', {
-        key: 'status',
-        onClick: function(e) {
-          e.preventDefault();
-          that.props.showStatusDialog();
-        }
-      }, h('div.circle')));
+      if (this.props.useSyncbase) {
+        children.push(h('div.status', {
+          key: 'status',
+          onClick: function(e) {
+            e.stopPropagation();
+            that.props.openStatusDialog(list._id);
+          }
+        }, h('div.circle' + (list.sg ? '.shared' : ''))));
+      }
       children.push(h('div.display', {
         key: 'display'
       }, h('a.list-name' + (list.name ? '' : '.empty'), {
@@ -340,7 +339,7 @@ var List = React.createFactory(React.createClass({
       }, list.name)));
     }
     return h('div.list' + (list.selected ? '.selected' : ''), {
-      onMouseDown: function() {
+      onClick: function() {
         that.props.setListId(list._id);
       },
       onDoubleClick: function() {
@@ -362,17 +361,46 @@ var StatusPane = React.createFactory(React.createClass({
     Mousetrap.unbind('esc');
   },
   render: function() {
-    var that = this;
+    var that = this, list = this.props.list, shared = Boolean(list.sg);
+    var loc = window.location;
+    var shareUrl = loc.origin + '/share/' + list._id + loc.search;
     return h('div#status-pane', {
       onClick: function(e) {
+        e.stopPropagation();
         if (e.target === e.currentTarget) {
           that.props.close();
         }
       }
     }, h('div.status-dialog', [
-      // TODO(sadovsky): Add stuff here.
-      h('h4', {key: 'title'}, 'Share with others'),
-      // FIXME: Finish implementing this.
+      h('h3', {key: 'title'}, 'Share with others'),
+      h('input', _.assign({
+        key: 'input',
+        placeholder: 'Add email address',
+        // TODO(sadovsky): Let the user add members to an existing SG once
+        // Syncbase supports it.
+        disabled: shared
+      }, okCancelEvents({
+        ok: function(value, e) {
+          disp.createSyncGroup(list._id);
+          e.target.value = '';
+        },
+        cancel: function(e) {
+          e.target.value = '';
+        }
+      }, true))),
+      // TODO(sadovsky): Exclude self from displayed member list?
+      !shared ? null : h('div.shared-with', {key: 'shared-with'}, [
+        h('div.subtitle', {key: 'subtitle'}, 'Currently shared with'),
+        h('div.emails', {
+          key: 'emails'
+        }, _.map(list.sg.members, function(member) {
+          return h('div.email', {key: member}, member);
+        }))
+      ]),
+      !shared ? null : h('div.url', {key: 'url'}, [
+        h('div.subtitle', {key: 'subtitle'}, 'Url to share with invitees'),
+        h('div.value', {key: 'value'}, shareUrl)
+      ]),
       h('div.close', {
         key: 'close',
         onClick: function() {
@@ -385,11 +413,6 @@ var StatusPane = React.createFactory(React.createClass({
 
 var ListsPane = React.createFactory(React.createClass({
   displayName: 'ListsPane',
-  getInitialState: function() {
-    return {
-      statusDialog: null  // null or list id
-    };
-  },
   render: function() {
     var that = this;
     var children = [h('div.lists-title', {key: 'title'}, 'Todo Lists')];
@@ -402,10 +425,9 @@ var ListsPane = React.createFactory(React.createClass({
         lists.push(List({
           key: list._id,
           list: list,
+          useSyncbase: that.props.useSyncbase,
           setListId: that.props.setListId,
-          showStatusDialog: function() {
-            that.setState({statusDialog: list._id});
-          }
+          openStatusDialog: that.props.openStatusDialog
         }));
       });
       children.push(h('div', {key: 'lists'}, lists));
@@ -421,14 +443,6 @@ var ListsPane = React.createFactory(React.createClass({
           e.target.value = '';
         }
       })))));
-      if (this.state.statusDialog) {
-        children.push(StatusPane({
-          key: 'status',
-          close: function() {
-            that.setState({statusDialog: null});
-          }
-        }));
-      }
     }
     return h('div#lists-pane', children);
   }
@@ -450,13 +464,17 @@ var Page = React.createFactory(React.createClass({
   getInitialState: function() {
     return {
       dispInitialized: false,
+      // Note, SG data is attached to individual list items.
       lists: {seq: 0, items: null},  // all lists
       todos: {},  // map of listId to {seq, items}
-      // FIXME: Populate and use this.
-      syncgroups: {},  // map of listId to sgInfo
       listId: this.props.initialListId,  // current list
-      tagFilter: null  // current tag
+      tagFilter: null,  // current tag
+      showStatusDialog: false
     };
+  },
+  getSyncGroup_: function(listId, cb) {
+    console.assert(this.props.dispType === DISP_TYPE_SYNCBASE);
+    disp.getSyncGroup(listId, cb);
   },
   getLists_: function(cb) {
     disp.getLists(function(err, lists) {
@@ -475,6 +493,10 @@ var Page = React.createFactory(React.createClass({
       return cb(null, _.sortBy(todos, 'timestamp'));
     });
   },
+  setListId_: function(listId) {
+    if (listId === this.state.listId) return;
+    this.setState({listId: listId, tagFilter: null});
+  },
   updateURL: function() {
     var listId = this.state.listId;
     var pathname = !listId ? '/' : '/lists/' + listId;
@@ -484,9 +506,20 @@ var Page = React.createFactory(React.createClass({
   componentWillMount: function() {
     var that = this, props = this.props;
     var dt = props.dispType, sn = props.syncbaseName, bm = props.benchmark;
+    function done() {
+      that.setState({dispInitialized: true});
+    }
     initDispatcher(dt, sn, bm, function(err) {
       if (err) throw err;
-      that.setState({dispInitialized: true});
+      if (props.joinListId) {
+        console.assert(dt === DISP_TYPE_SYNCBASE);
+        disp.joinSyncGroup(props.joinListId, function(err) {
+          if (err) throw err;
+          done();
+        });
+      } else {
+        done();
+      }
     });
   },
   componentDidMount: function() {
@@ -588,8 +621,8 @@ var Page = React.createFactory(React.createClass({
       return null;
     }
 
-    var that = this;
-    var listId = this.state.listId;
+    var that = this, listId = this.state.listId;
+    var useSyncbase = this.props.dispType === DISP_TYPE_SYNCBASE;
     // If currTodos is {}, todos.items will be undefined, as desired.
     var currTodos = this.state.todos[listId] || {};
     return h('div#page-pane', [
@@ -608,13 +641,19 @@ var Page = React.createFactory(React.createClass({
         key: 'ListsPane',
         lists: this.state.lists.items,
         listId: listId,
-        setListId: function(listId) {
-          if (listId !== that.state.listId) {
-            that.setState({
-              listId: listId,
-              tagFilter: null
-            });
+        useSyncbase: useSyncbase,
+        setListId: this.setListId_,
+        openStatusDialog: function(listId) {
+          console.assert(useSyncbase);
+          if (that.state.showStatusDialog) {
+            return;
           }
+          // Note, setState just schedules render, so setListId's state update
+          // will be merged with ours.
+          that.setListId_(listId);
+          that.setState({
+            showStatusDialog: true
+          });
         }
       }),
       h('div#tags-and-todos-pane', {key: 'tags-and-todos-pane'}, [
@@ -632,7 +671,14 @@ var Page = React.createFactory(React.createClass({
           listId: listId,
           tagFilter: this.state.tagFilter
         })
-      ])
+      ]),
+      !this.state.showStatusDialog ? null : StatusPane({
+        key: 'status',
+        list: _.find(this.state.lists.items, {_id: listId}),
+        close: function() {
+          that.setState({showStatusDialog: false});
+        }
+      })
     ]);
   }
 }));
@@ -640,38 +686,38 @@ var Page = React.createFactory(React.createClass({
 ////////////////////////////////////////
 // Initialization
 
-// TODO(sadovsky): Override other console methods and add window.onerror
-// handler.
-var logEl = document.querySelector('#log');
-var consoleLog = console.log.bind(console);
-console.log = function() {
-  var args = [util.timestamp()].concat(Array.prototype.slice.call(arguments));
-  consoleLog.apply(null, args);
-  var msgEl = document.createElement('div');
-  msgEl.className = 'msg';
-  msgEl.innerText = args.join(' ');
-  logEl.appendChild(msgEl);
-  logEl.scrollTop = logEl.scrollHeight;  // scroll to bottom
-};
+// Start our DOM log module. Developers can press Ctrl+L (or Meta+L) to toggle
+// visibility of the log.
+domLog.init();
 
-Mousetrap.bind(['ctrl+l', 'meta+l'], function() {
-  logEl.classList.toggle('visible');
-});
-
-// Note, ctx here is a Page.js context, not a Vanadium context.
-function main(ctx) {
-  var dispType = u.query.d || 'collection';
+function render(listId, doJoin) {
+  var dispType = u.query.d || DISP_TYPE_COLLECTION;
   var syncbaseName = u.query.n || SYNCBASE_NAME;
   var benchmark = Boolean(u.query.bm);
   var props = {
-    initialListId: ctx.params.listId,
+    initialListId: listId,
     dispType: dispType,
     syncbaseName: syncbaseName,
     benchmark: benchmark
   };
+  if (doJoin) {
+    props.joinListId = listId;
+  }
   React.render(Page(props), document.querySelector('#page'));
 }
 
-page('/', main);
-page('/lists/:listId', main);
+// Configure Page.js routes. Note, ctx here is a Page.js context object, not a
+// Vanadium context object.
+page('/', function(ctx) {
+  render(null, false);
+});
+page('/lists/:listId', function(ctx) {
+  render(ctx.params.listId, false);
+});
+page('/share/:listId', function(ctx) {
+  render(ctx.params.listId, true);
+});
+
+// Start Page.js router.
+// https://visionmedia.github.io/page.js/
 page({click: false});

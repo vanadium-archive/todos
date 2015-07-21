@@ -125,17 +125,54 @@ function define(name, fn) {
 // TODO(sadovsky): Switch to storing VDL values (instead of JSON) and use a
 // query to get all values of a particular type.
 define('getLists', function(ctx, cb) {
+  var that = this;
   // NOTE(sadovsky): Storing lists in a separate keyspace from todos and tags
   // could make this scan faster. But given the size of the data (tiny), it
   // shouldn't make much difference.
-  this.getRows_(ctx, null, function(err, rows) {
+  async.parallel([
+    function(cb) {
+      that.getRows_(ctx, null, function(err, rows) {
+        if (err) return cb(err);
+        var lists = [];
+        _.forEach(rows, function(row) {
+          if (row.key.indexOf(SEP) >= 0) {
+            return;
+          }
+          lists.push(_.assign({}, unmarshal(row.value), {_id: row.key}));
+        });
+        return cb(null, lists);
+      });
+    },
+    // Returns a list of SG objects (from getSyncGroup), one per SG.
+    // TODO(sadovsky): Would be nice if Syncbase could provide more info in a
+    // single RPC.
+    function(cb) {
+      bm.logFn('getSyncGroupNames', cb);
+      // FIXME: Remove this hack once db.getSyncGroupNames, sg.getSpec, and
+      // sg.getMembers are implemented.
+      /* jshint -W027 */
+      return process.nextTick(function() {
+        cb(null, []);
+      });
+      that.db_.getSyncGroupNames(ctx, function(err, sgNames) {
+        if (err) return cb(err);
+        async.map(sgNames, function(sgName, cb) {
+          that.getSyncGroup(ctx, that.sgNameToListId_(sgName), cb);
+        }, cb);
+      });
+    }
+  ], function(err, results) {
     if (err) return cb(err);
-    var lists = [];
-    _.forEach(rows, function(row) {
-      if (row.key.indexOf(SEP) >= 0) {
-        return;
-      }
-      lists.push(_.assign({}, unmarshal(row.value), {_id: row.key}));
+    var lists = results[0], sgs = results[1];
+    // Left join: add 'sg' field to each list for which there's an SG.
+    _.forEach(lists, function(list) {
+      var listId = list._id;
+      _.forEach(sgs, function(sg) {
+        console.assert(sg.spec.Prefixes.length === 1);
+        if (listId === sg.spec.Prefixes[0]) {
+          list.sg = sg;
+        }
+      });
     });
     return cb(null, lists);
   });
@@ -235,6 +272,77 @@ define('removeTag', function(ctx, todoId, tag, cb) {
   this.tb_.row(tagKey(todoId, tag)).delete(ctx, this.maybeEmit_(cb));
 });
 
+////////////////////////////////////////
+// SyncGroup methods
+
+// TODO(sadovsky): It's not clear from the Syncbase API how SG names should be
+// constructed, and it's also weird that db.SyncGroup(name) expects an absolute
+// name. We should probably allow clients to specify DB-relative SG names.
+
+// Currently, SG names must be of the form <syncbaseName>/$sync/<suffix>.
+// We use <app>/<db>/<table>/<listId> for the suffix part
+
+SyncbaseDispatcher.prototype.sgNameToListId_ = function(sgName) {
+  return sgName.replace(new RegExp('.*/$sync/todos/db/tb/'), '');
+};
+
+SyncbaseDispatcher.prototype.listIdToSgName_ = function(listId) {
+  var prefix = this.tb_.fullName.replace('/todos/db/tb/',
+                                         '/$sync/todos/db/tb/');
+  return prefix + listId;
+};
+
+// Returns spec and members for the given list.
+define('getSyncGroup', function(ctx, listId, cb) {
+  var sg = this.db_.syncGroup(this.listIdToSgName_(listId));
+  async.parallel([
+    function(cb) {
+      sg.getSpec(ctx, cb);
+    },
+    function(cb) {
+      sg.getMembers(ctx, cb);
+    }
+  ], function(err, results) {
+    if (err) return cb(err);
+    // FIXME: Convert 'members' to email addresses.
+    return {
+      spec: results[0],
+      members: _.keys(results[1])
+    };
+  });
+});
+
+// TODO(sadovsky): Copied from test-syncgroup.js. I have no idea whether this
+// value is appropriate.
+var MEMBER_INFO = new nosql.SyncGroupMemberInfo({
+  syncPriority: 8
+});
+
+define('createSyncGroup', function(ctx, listId, cb) {
+  var sg = this.db_.syncGroup(this.listIdToSgName_(listId));
+  var spec = new nosql.SyncGroupSpec({
+    // TODO(sadovsky): Make perms more restrictive.
+    perms: new Map([
+      ['Admin',   {'In': ['...']}],
+      ['Read',    {'In': ['...']}],
+      ['Write',   {'In': ['...']}],
+      ['Resolve', {'In': ['...']}],
+      ['Debug',   {'In': ['...']}]
+    ]),
+    // TODO(sadovsky): Update this once we switch to {table, prefix} tuples.
+    prefixes: ['tb:' + listId]
+  });
+  sg.create(ctx, spec, MEMBER_INFO, this.maybeEmit_(cb));
+});
+
+define('joinSyncGroup', function(ctx, listId, cb) {
+  var sg = this.db_.syncGroup(this.listIdToSgName_(listId));
+  sg.join(ctx, MEMBER_INFO, this.maybeEmit_(cb));
+});
+
+////////////////////////////////////////
+// vtrace methods
+
 // DO NOT USE THIS. vtrace RPCs are extremely slow in JavaScript because VOM
 // decoding is slow for trace records, which are deeply nested. E.g. 100 puts
 // can take 20+ seconds with vtrace vs. 2 seconds without.
@@ -250,6 +358,9 @@ SyncbaseDispatcher.prototype.getTraceRecords = function() {
 SyncbaseDispatcher.prototype.logTraceRecords = function() {
   console.log(vtrace.formatTraces(this.getTraceRecords()));
 };
+
+////////////////////////////////////////
+// Internal helpers
 
 // TODO(sadovsky): Watch for changes on Syncbase itself so that we can detect
 // when data arrives via sync, and drop this method.
@@ -287,6 +398,8 @@ define('getRows_', function(ctx, listId, cb) {
 
 // Performs a read-modify-write on key, applying updateFn to the value.
 // Takes care of value marshalling and unmarshalling.
+// TODO(sadovsky): Atomic read-modify-write requires 4 RPCs. MongoDB-style API
+// would bring it down to 1.
 define('update_', function(ctx, key, updateFn, cb) {
   var opts = new nosql.BatchOptions();
   nosql.runInBatch(ctx, this.db_, opts, function(db, cb) {

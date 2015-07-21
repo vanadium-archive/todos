@@ -150,10 +150,14 @@ input {
       cursor: pointer;
 
       .circle {
-	      width: 8px;
-	      height: 8px;
+	      width: 10px;
+	      height: 10px;
         border-radius: 50%;
         background-color: #888;
+
+        &.shared {
+          background-color: @color-green-700;
+        }
       }
     }
 
@@ -192,16 +196,15 @@ input {
     border: 1px solid rgba(0, 0, 0, 0.3);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 
-    .title {
-      font-size: 18px;
-      margin-bottom: 1em;
+    input {
+      width: 50%;
     }
 
     .close {
       position: absolute;
       top: 0;
       right: 0;
-      margin: 6px;
+      margin: 8px;
       background: url("/public/destroy.png") no-repeat 0 0;
       cursor: pointer;
       height: 20px;
@@ -349,18 +352,23 @@ input {
   width: 100%;
   height: 300px;
   z-index: 2;  /* above .disp-type */
-  padding: 16px;
-  border-top: 1px solid #000;
+  padding: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.3);
   overflow-y: scroll;
   background-color: #fff;
-  color: #000;
-  font: 400 14px/1.4 monospace;
+  color: #333;
+  font: 400 13px/1.4 monospace;
   white-space: pre-wrap;
   word-wrap: break-word;
   transform: translate3d(0, 100%, 0);
   transition: transform 0.2s ease-out;
 
+  .error {
+    color: red;
+  }
+
   &.visible {
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2);
     transform: translate3d(0, 0, 0);
   }
 }
@@ -374,7 +382,7 @@ input {
   cursor: pointer;
   z-index: 1;
 
-  &.collection {
+  &.mem-collection {
     background-color: @color-red-700;
   }
 

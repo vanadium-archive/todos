@@ -18,14 +18,16 @@ function logStart(name) {
   return Date.now();
 }
 
-function logStop(name, start) {
-  console.log(name + ' took ' + (Date.now() - start) + 'ms');
+function logStop(name, start, err) {
+  var dt = Date.now() - start;
+  console.log(name + (err ? ' FAILED after ' : ' took ') + dt + 'ms');
+  if (err) console.error(err);
 }
 
 function logFn(name, cb) {
   var start = logStart(name);
-  return function() {
-    logStop(name, start);
+  return function(err) {
+    logStop(name, start, err);
     cb.apply(null, arguments);
   };
 }
