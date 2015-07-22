@@ -10,8 +10,11 @@ function append(className, msg) {
   var msgEl = document.createElement('div');
   msgEl.className = className;
   msgEl.innerText = msg;
+  var wasBottom = logEl.scrollTop === (logEl.scrollHeight - logEl.clientHeight);
   logEl.appendChild(msgEl);
-  logEl.scrollTop = logEl.scrollHeight;  // scroll to bottom
+  if (wasBottom) {
+    logEl.scrollTop = logEl.scrollHeight;  // scroll to bottom
+  }
 }
 
 exports.init = function() {

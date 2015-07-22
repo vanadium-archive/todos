@@ -10,6 +10,7 @@ var React = require('react');
 var url = require('url');
 var vanadium = require('vanadium');
 
+var bm = require('./benchmark');
 var defaults = require('./defaults');
 var domLog = require('./dom_log');
 var h = require('./util').h;
@@ -35,6 +36,16 @@ var u = url.parse(window.location.href, true);
 
 function noop() {}
 
+function initVanadium(cb) {
+  cb = bm.logFn('initVanadium', cb);
+  var vanadiumConfig = {
+    logLevel: vanadium.vlog.levels.INFO,
+    namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
+    proxy: u.query.proxy
+  };
+  vanadium.init(vanadiumConfig, cb);
+}
+
 function initDispatcher(dispType, syncbaseName, benchmark, cb) {
   var clientCb = cb;
   cb = function(err, resDisp) {
@@ -46,12 +57,7 @@ function initDispatcher(dispType, syncbaseName, benchmark, cb) {
     console.assert(!benchmark);
     defaults.initCollectionDispatcher(cb);
   } else if (dispType === DISP_TYPE_SYNCBASE) {
-    var vanadiumConfig = {
-      logLevel: vanadium.vlog.levels.INFO,
-      namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
-      proxy: u.query.proxy
-    };
-    vanadium.init(vanadiumConfig, function(err, rt) {
+    initVanadium(function(err, rt) {
       if (err) return cb(err);
       defaults.initSyncbaseDispatcher(rt, syncbaseName, benchmark, cb);
     });

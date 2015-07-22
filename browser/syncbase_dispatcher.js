@@ -17,6 +17,7 @@
 // scan to get all lists) include orphaned records. If we switch from scans to
 // queries, performance should improve since all row filtering will happen
 // server side.
+// TODO(sadovsky): Better yet, move lists to a separate keyspace.
 
 'use strict';
 
@@ -41,6 +42,13 @@ function SyncbaseDispatcher(rt, db) {
   this.ctx_ = rt.getContext();
   this.db_ = db;
   this.tb_ = db.table('tb');
+
+  // Start the watch loop to periodically poll for changes from sync.
+  // TODO(sadovsky): Remove this once we have client watch.
+  var that = this;
+  process.nextTick(function() {
+    that.watchLoop_();
+  });
 }
 
 ////////////////////////////////////////
@@ -52,7 +60,7 @@ var SEP = '.';  // separator for key parts
 
 function join() {
   // TODO(sadovsky): Switch to using naming.join() once Syncbase allows slashes
-  // in row keys.
+  // in row keys. Also, restrict which chars are allowed in tags.
   var args = Array.prototype.slice.call(arguments);
   return args.join(SEP);
 }
@@ -72,6 +80,15 @@ function newTodoKey(listId) {
 
 function tagKey(todoId, tag) {
   return join(todoId, 'tags', tag);
+}
+
+function keyToListId(key) {
+  var parts = key.split(SEP);
+  // Assume key is for list, todo, or tag.
+  if (parts.length === 1 || parts.length === 3 || parts.length === 5) {
+    return parts[0];
+  }
+  throw new Error('bad key: ' + key);
 }
 
 function marshal(x) {
@@ -136,9 +153,9 @@ define('getLists', function(ctx, cb) {
         var lists = [];
         _.forEach(rows, function(row) {
           if (row.key.indexOf(SEP) >= 0) {
-            return;
+            return;  // ignore nested (and therefore non-list) records
           }
-          lists.push(_.assign({}, unmarshal(row.value), {_id: row.key}));
+          lists.push(_.assign(unmarshal(row.value), {_id: row.key}));
         });
         return cb(null, lists);
       });
@@ -191,7 +208,7 @@ define('getTodos', function(ctx, listId, cb) {
         if (todo._id) {
           todos.push(todo);
         }
-        todo = _.assign({}, unmarshal(row.value), {_id: row.key});
+        todo = _.assign(unmarshal(row.value), {_id: row.key});
       } else if (parts.length === 5) {  // tag for current todo
         if (!todo.tags) {
           todo.tags = [];
@@ -212,7 +229,7 @@ define('addList', function(ctx, list, cb) {
   this.tb_.put(ctx, listId, v, this.maybeEmit_(function(err) {
     if (err) return cb(err);
     return cb(null, listId);
-  }));
+  }, listId));
 });
 
 define('editListName', function(ctx, listId, name, cb) {
@@ -242,11 +259,11 @@ define('addTodo', function(ctx, listId, todo, cb) {
         that.addTagImpl_(ctx, tb, todoId, tag, cb);
       }, cb);
     });
-  }, this.maybeEmit_(cb));
+  }, this.maybeEmit_(cb, todoId));
 });
 
 define('removeTodo', function(ctx, todoId, cb) {
-  this.tb_.row(todoId).delete(ctx, this.maybeEmit_(cb));
+  this.tb_.row(todoId).delete(ctx, this.maybeEmit_(cb, todoId));
 });
 
 define('editTodoText', function(ctx, todoId, text, cb) {
@@ -262,14 +279,14 @@ define('markTodoDone', function(ctx, todoId, done, cb) {
 });
 
 define('addTag', function(ctx, todoId, tag, cb) {
-  this.addTagImpl_(ctx, this.tb_, todoId, tag, this.maybeEmit_(cb));
+  this.addTagImpl_(ctx, this.tb_, todoId, tag, this.maybeEmit_(cb, todoId));
 });
 
 define('removeTag', function(ctx, todoId, tag, cb) {
   // NOTE: Table.delete is awkward (it takes a range), so instead we use
   // Row.delete. It would be nice for Table.delete to operate on a single row
   // and have a separate Table.deleteRowRange.
-  this.tb_.row(tagKey(todoId, tag)).delete(ctx, this.maybeEmit_(cb));
+  this.tb_.row(tagKey(todoId, tag)).delete(ctx, this.maybeEmit_(cb, todoId));
 });
 
 ////////////////////////////////////////
@@ -280,7 +297,7 @@ define('removeTag', function(ctx, todoId, tag, cb) {
 // name. We should probably allow clients to specify DB-relative SG names.
 
 // Currently, SG names must be of the form <syncbaseName>/$sync/<suffix>.
-// We use <app>/<db>/<table>/<listId> for the suffix part
+// We use <app>/<db>/<table>/<listId> for the suffix part.
 
 SyncbaseDispatcher.prototype.sgNameToListId_ = function(sgName) {
   return sgName.replace(new RegExp('.*/$sync/todos/db/tb/'), '');
@@ -360,16 +377,122 @@ SyncbaseDispatcher.prototype.logTraceRecords = function() {
 };
 
 ////////////////////////////////////////
+// Polling-based watch
+
+// Random number, used to implement watch. Each client writes to their own watch
+// key to signify that they've written new data, and each client periodically
+// polls all watch keys to see if anything has changed.
+var clientId = uuid();
+function watchPrefix(listId) {
+  return join(listId, 'watch');
+}
+function watchKey(listId) {
+  return join(watchPrefix(listId), clientId);
+}
+
+var seq = 0;  // for our own writes
+var prevWatchVersions = {};  // map of list id to version string
+
+// Increments stored seq for this client.
+define('bumpSeq_', function(ctx, listId, cb) {
+  seq++;
+  this.tb_.put(ctx, watchKey(listId), seq, cb);
+});
+
+// TODO(sadovsky): Use a query for better performance. In theory it's possible
+// to query based on row key regexp.
+define('getListIds_', function(ctx, cb) {
+  this.getRows_(ctx, null, function(err, rows) {
+    if (err) return cb(err);
+    var listIds = [];
+    _.forEach(rows, function(row) {
+      if (row.key.indexOf(SEP) >= 0) {
+        return;  // ignore nested (and therefore non-list) records
+      }
+      listIds.push(row.key);
+    });
+    return cb(null, listIds);
+  });
+});
+
+// Returns a watch seq map for the given list id.
+define('getWatchSeqMap_', function(ctx, listId, cb) {
+  this.getRows_(ctx, watchPrefix(listId), function(err, rows) {
+    if (err) return cb(err);
+    var seqMap = {};  // map of client id to seq
+    _.forEach(rows, function(row) {
+      var parts = row.key.split(SEP);
+      console.assert(parts.length === 3);  // <listId>/watch/<clientId>
+      seqMap[parts[2]] = row.value;
+    });
+    cb(null, seqMap);
+  });
+});
+
+// Returns true if any data has arrived via sync, false if not.
+define('checkForChanges_', function(ctx, cb) {
+  var that = this;
+  this.getListIds_(ctx, function(err, listIds) {
+    if (err) return cb(err);
+    // Build a map of list id to current version.
+    var currWatchVersions = {};
+    async.each(listIds, function(listId, cb) {
+      that.getWatchSeqMap_(ctx, listId, function(err, seqMap) {
+        if (err) return cb(err);
+        // Remove self from seqMap, join the rest into a version string.
+        delete seqMap[clientId];
+        var strs = _.map(seqMap, function(v, k) {
+          return k + ':' + v;
+        });
+        currWatchVersions[listId] = strs.sort().join(',');
+        cb();
+      });
+    }, function(err) {
+      if (err) return cb(err);
+      // Note that _.isEqual performs a deep comparison.
+      var changed = !_.isEqual(currWatchVersions, prevWatchVersions);
+      prevWatchVersions = currWatchVersions;
+      cb(null, changed);
+    });
+  });
+});
+
+// Runs checkForChanges_ periodically and emits a 'change' event whenever a
+// change (from remote peer) is detected.
+SyncbaseDispatcher.prototype.watchLoop_ = function() {
+  var that = this;
+  // TODO(sadovsky): Add a bit to the context that says "don't log stuff", and
+  // respect that bit in define(), so that we don't spam our log with watch
+  // messages.
+  this.checkForChanges_(function(err, changed) {
+    if (err) {
+      console.log('checkForChanges_ failed: ' + err);
+    } else if (changed) {
+      console.log('checkForChanges_ detected a change');
+      that.emit('change');
+    }
+    window.setTimeout(that.watchLoop_.bind(that), 500);
+  });
+};
+
+////////////////////////////////////////
 // Internal helpers
 
 // TODO(sadovsky): Watch for changes on Syncbase itself so that we can detect
 // when data arrives via sync, and drop this method.
-SyncbaseDispatcher.prototype.maybeEmit_ = function(cb) {
+SyncbaseDispatcher.prototype.maybeEmit_ = function(cb, key) {
   var that = this;
   cb = cb || noop;
   return function(err) {
     cb.apply(null, arguments);
-    if (!err) that.emit('change');
+    if (err) return;
+    that.emit('change');
+    if (key) {
+      // Run bumpSeq_ in the background.
+      that.bumpSeq_(keyToListId(key), function(err) {
+        if (err) console.log('bumpSeq_ failed: ' + err);
+      });
+    }
   };
 };
 
@@ -382,9 +505,9 @@ define('addTagImpl_', function(ctx, tb, todoId, tag, cb) {
 });
 
 // Returns all rows in the table.
-define('getRows_', function(ctx, listId, cb) {
+define('getRows_', function(ctx, prefix, cb) {
   var rows = [], streamErr = null;
-  var range = nosql.rowrange.prefix(listId || '');
+  var range = nosql.rowrange.prefix(prefix || '');
   this.tb_.scan(ctx, range, function(err) {
     if (err) return cb(err);
     if (streamErr) return cb(streamErr);
@@ -409,5 +532,5 @@ define('update_', function(ctx, key, updateFn, cb) {
       var newValue = marshal(updateFn(unmarshal(value)));
       tb.put(wn(ctx, 'put:' + key), key, newValue, cb);
     });
-  }, this.maybeEmit_(cb));
+  }, this.maybeEmit_(cb, key));
 });
