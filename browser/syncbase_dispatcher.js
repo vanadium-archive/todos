@@ -91,10 +91,10 @@ function keyToListId(key) {
   throw new Error('bad key: ' + key);
 }
 
+// TODO(sadovsky): Switch from JSON to VOM.
 function marshal(x) {
   return JSON.stringify(x);
 }
-
 function unmarshal(x) {
   return JSON.parse(x);
 }
@@ -112,6 +112,8 @@ function wn(ctx, name) {
   return vtrace.withNewSpan(ctx, name);
 }
 
+var SILENT = new vanadium.context.ContextKey();
+
 // Defines a SyncbaseDispatcher method. If the first argument to fn is not a
 // context, creates a new context with a timeout.
 function define(name, fn) {
@@ -128,10 +130,13 @@ function define(name, fn) {
     if (typeof args[args.length - 1] !== 'function') {
       args.push(noop);
     }
-    // Drop ctx and cb, convert to JSON, drop square brackets.
-    var cb = args[args.length - 1];
-    var argsStr = JSON.stringify(args.slice(1, -1)).slice(1, -1);
-    args[args.length - 1] = bm.logFn(name + '(' + argsStr + ')', cb);
+    if (!ctx.value(SILENT)) {
+      // Build args string for logging the invocation. Drop ctx and cb, convert
+      // to JSON, drop square brackets.
+      var cb = args[args.length - 1];
+      var argsStr = JSON.stringify(args.slice(1, -1)).slice(1, -1);
+      args[args.length - 1] = bm.logFn(name + '(' + argsStr + ')', cb);
+    }
     return fn.apply(this, args);
   };
 }
@@ -139,26 +144,27 @@ function define(name, fn) {
 ////////////////////////////////////////
 // SyncbaseDispatcher impl
 
-// TODO(sadovsky): Switch to storing VDL values (instead of JSON) and use a
-// query to get all values of a particular type.
+// TODO(sadovsky): Use a query for better performance. In theory it's possible
+// to query based on row key regexp.
 define('getLists', function(ctx, cb) {
+  this.getRows_(ctx, null, function(err, rows) {
+    if (err) return cb(err);
+    var lists = [];
+    _.forEach(rows, function(row) {
+      if (row.key.indexOf(SEP) >= 0) {
+        return;  // ignore nested (and therefore non-list) records
+      }
+      lists.push(_.assign(unmarshal(row.value), {_id: row.key}));
+    });
+    return cb(null, lists);
+  });
+});
+
+define('getListsWithSyncGroups', function(ctx, cb) {
   var that = this;
-  // NOTE(sadovsky): Storing lists in a separate keyspace from todos and tags
-  // could make this scan faster. But given the size of the data (tiny), it
-  // shouldn't make much difference.
   async.parallel([
     function(cb) {
-      that.getRows_(ctx, null, function(err, rows) {
-        if (err) return cb(err);
-        var lists = [];
-        _.forEach(rows, function(row) {
-          if (row.key.indexOf(SEP) >= 0) {
-            return;  // ignore nested (and therefore non-list) records
-          }
-          lists.push(_.assign(unmarshal(row.value), {_id: row.key}));
-        });
-        return cb(null, lists);
-      });
+      that.getLists(ctx, cb);
     },
     // Returns a list of SG objects (from getSyncGroup), one per SG.
     // TODO(sadovsky): Would be nice if Syncbase could provide more info in a
@@ -399,22 +405,6 @@ define('bumpSeq_', function(ctx, listId, cb) {
   this.tb_.put(ctx, watchKey(listId), seq, cb);
 });
 
-// TODO(sadovsky): Use a query for better performance. In theory it's possible
-// to query based on row key regexp.
-define('getListIds_', function(ctx, cb) {
-  this.getRows_(ctx, null, function(err, rows) {
-    if (err) return cb(err);
-    var listIds = [];
-    _.forEach(rows, function(row) {
-      if (row.key.indexOf(SEP) >= 0) {
-        return;  // ignore nested (and therefore non-list) records
-      }
-      listIds.push(row.key);
-    });
-    return cb(null, listIds);
-  });
-});
-
 // Returns a watch seq map for the given list id.
 define('getWatchSeqMap_', function(ctx, listId, cb) {
   this.getRows_(ctx, watchPrefix(listId), function(err, rows) {
@@ -432,10 +422,11 @@ define('getWatchSeqMap_', function(ctx, listId, cb) {
 // Returns true if any data has arrived via sync, false if not.
 define('checkForChanges_', function(ctx, cb) {
   var that = this;
-  this.getListIds_(ctx, function(err, listIds) {
+  this.getLists(ctx, function(err, lists) {
     if (err) return cb(err);
     // Build a map of list id to current version.
     var currWatchVersions = {};
+    var listIds = _.pluck(lists, '_id');
     async.each(listIds, function(listId, cb) {
       that.getWatchSeqMap_(ctx, listId, function(err, seqMap) {
         if (err) return cb(err);
@@ -461,10 +452,8 @@ define('checkForChanges_', function(ctx, cb) {
 // change (from remote peer) is detected.
 SyncbaseDispatcher.prototype.watchLoop_ = function() {
   var that = this;
-  // TODO(sadovsky): Add a bit to the context that says "don't log stuff", and
-  // respect that bit in define(), so that we don't spam our log with watch
-  // messages.
-  this.checkForChanges_(function(err, changed) {
+  var ctx = wt(this.ctx_).withValue(SILENT, 1);
+  this.checkForChanges_(ctx, function(err, changed) {
     if (err) {
       console.log('checkForChanges_ failed: ' + err);
     } else if (changed) {

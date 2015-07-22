@@ -483,7 +483,7 @@ var Page = React.createFactory(React.createClass({
     disp.getSyncGroup(listId, cb);
   },
   getLists_: function(cb) {
-    disp.getLists(function(err, lists) {
+    disp.getListsWithSyncGroups(function(err, lists) {
       if (err) return cb(err);
       // Sort lists by name in the UI.
       return cb(null, _.sortBy(lists, 'name'));
