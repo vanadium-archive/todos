@@ -25,8 +25,8 @@ var SYNCBASE_NAME = '/localhost:8200';  // default value
 ////////////////////////////////////////
 // Global state
 
-// Dispatcher, initialized by initDispatcher.
-var disp;
+// Dispatcher and user's email address, both initialized by initDispatcher.
+var disp, userEmail;
 
 // Used for query params.
 var u = url.parse(window.location.href, true);
@@ -59,6 +59,7 @@ function initDispatcher(dispType, syncbaseName, benchmark, cb) {
   } else if (dispType === DISP_TYPE_SYNCBASE) {
     initVanadium(function(err, rt) {
       if (err) return cb(err);
+      userEmail = blessingToEmail(rt.accountName);
       defaults.initSyncbaseDispatcher(rt, syncbaseName, benchmark, cb);
     });
   } else {
@@ -66,6 +67,16 @@ function initDispatcher(dispType, syncbaseName, benchmark, cb) {
       cb(new Error('unknown dispType: ' + dispType));
     });
   }
+}
+
+// HACKETY HACK
+function emailToBlessing(email) {
+  return 'dev.v.io/u/' + email;
+}
+function blessingToEmail(blessing) {
+  var parts = blessing.split('/');
+  console.assert(parts.length >= 3);
+  return parts[2];
 }
 
 function activateInput(input) {
@@ -265,6 +276,8 @@ var TodosPane = React.createFactory(React.createClass({
   render: function() {
     var that = this;
     var children = [];
+    // TODO(sadovsky): If there are no lists (and thus no todos), we end up
+    // rendering "Loading..." here, which is wrong.
     if (!this.props.listId || !this.props.todos) {
       children.push(h('div.loading', {key: 'loading'}, 'Loading...'));
     } else {
@@ -382,30 +395,41 @@ var StatusPane = React.createFactory(React.createClass({
       h('input', _.assign({
         key: 'input',
         placeholder: 'Add email address',
-        // TODO(sadovsky): Let the user add members to an existing SG once
-        // Syncbase supports it.
-        disabled: shared
       }, okCancelEvents({
         ok: function(value, e) {
-          disp.createSyncGroup(list._id);
           e.target.value = '';
+          if (shared) {
+            // TODO(sadovsky): Let the user add members to an existing SG once
+            // Syncbase supports it.
+            console.error('Cannot add members to existing SyncGroup.');
+            return;
+          }
+          // TODO(sadovsky): Better input validation.
+          if (!value.includes('@') || !value.includes('.')) {
+            console.error('Invalid email address.');
+            return;
+          }
+          disp.createSyncGroup(list._id, [
+            emailToBlessing(userEmail),
+            emailToBlessing(value)
+          ]);
         },
         cancel: function(e) {
           e.target.value = '';
         }
       }, true))),
-      // TODO(sadovsky): Exclude self from displayed member list?
+      // TODO(sadovsky): Exclude self?
       !shared ? null : h('div.shared-with', {key: 'shared-with'}, [
         h('div.subtitle', {key: 'subtitle'}, 'Currently shared with'),
         h('div.emails', {
           key: 'emails'
-        }, _.map(list.sg.members, function(member) {
-          return h('div.email', {key: member}, member);
-        }))
+        }, _.map(list.sg.spec.perms.get('Admin')['in'], function(blessing) {
+          return blessingToEmail(blessing);
+        }).join(', '))
       ]),
       !shared ? null : h('div.url', {key: 'url'}, [
-        h('div.subtitle', {key: 'subtitle'}, 'Url to share with invitees'),
-        h('div.value', {key: 'value'}, shareUrl)
+        h('div.subtitle', {key: 'subtitle'}, 'URL to share with invitees'),
+        h('div.value', {key: 'value'}, h('a', {href: shareUrl}, shareUrl))
       ]),
       h('div.close', {
         key: 'close',
@@ -478,12 +502,8 @@ var Page = React.createFactory(React.createClass({
       showStatusDialog: false
     };
   },
-  getSyncGroup_: function(listId, cb) {
-    console.assert(this.props.dispType === DISP_TYPE_SYNCBASE);
-    disp.getSyncGroup(listId, cb);
-  },
   getLists_: function(cb) {
-    disp.getListsWithSyncGroups(function(err, lists) {
+    disp.getLists(function(err, lists) {
       if (err) return cb(err);
       // Sort lists by name in the UI.
       return cb(null, _.sortBy(lists, 'name'));
@@ -517,9 +537,15 @@ var Page = React.createFactory(React.createClass({
     }
     initDispatcher(dt, sn, bm, function(err) {
       if (err) throw err;
+      if (bm) {
+        console.log('benchmark done');
+        return;
+      }
       if (props.joinListId) {
         console.assert(dt === DISP_TYPE_SYNCBASE);
         disp.joinSyncGroup(props.joinListId, function(err) {
+          // Note, joinSyncGroup is a noop (no error) if the caller is already a
+          // member, which is the desired behavior here.
           if (err) throw err;
           done();
         });
@@ -597,12 +623,13 @@ var Page = React.createFactory(React.createClass({
     // TODO(sadovsky): Only read (and only redraw) what's needed based on what
     // changed.
     disp.on('change', function() {
+      var doneCb = bm.logFn('onChange', function(err) {
+        if (err) throw err;
+      });
       updateLists(function(err) {
         if (err) throw err;
         var listId = getListId();
-        updateTodos(listId, function(err) {
-          if (err) throw err;
-        });
+        updateTodos(listId, doneCb);
       });
     });
 

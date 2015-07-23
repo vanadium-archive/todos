@@ -3,9 +3,8 @@
 // Schema design doc (a bit outdated):
 // https://docs.google.com/document/d/1GtBk75QmjSorUW6T6BATCoiS_LTqOrGksgqjqJ1Hiow/edit#
 //
-// TODO(sadovsky): Currently, list and todo order are not preserved. We should
-// make the app always order these lexicographically, or better yet, use a
-// Dewey-Decimal-like scheme (with randomization).
+// TODO(sadovsky): Support arbitrary item reordering using a Dewey-Decimal-like
+// order-tracking scheme, with suffix randomization to prevent conflicts.
 //
 // NOTE: For now, when an item is deleted, any sub-items that were added
 // concurrently (on some other device) are orphaned. Eventually, we'll GC
@@ -14,10 +13,7 @@
 // stored in Syncbase.
 //
 // TODO(sadovsky): Orphaning degrades performance, because scan responses (e.g.
-// scan to get all lists) include orphaned records. If we switch from scans to
-// queries, performance should improve since all row filtering will happen
-// server side.
-// TODO(sadovsky): Better yet, move lists to a separate keyspace.
+// scan to get all todos for a given list) include orphaned records.
 
 'use strict';
 
@@ -60,7 +56,7 @@ var SEP = '.';  // separator for key parts
 
 function join() {
   // TODO(sadovsky): Switch to using naming.join() once Syncbase allows slashes
-  // in row keys. Also, restrict which chars are allowed in tags.
+  // in row keys. Also, restrict which chars are allowed in tag names.
   var args = Array.prototype.slice.call(arguments);
   return args.join(SEP);
 }
@@ -91,7 +87,7 @@ function keyToListId(key) {
   throw new Error('bad key: ' + key);
 }
 
-// TODO(sadovsky): Switch from JSON to VOM.
+// TODO(sadovsky): Maybe switch from JSON to VOM/VDL.
 function marshal(x) {
   return JSON.stringify(x);
 }
@@ -144,9 +140,10 @@ function define(name, fn) {
 ////////////////////////////////////////
 // SyncbaseDispatcher impl
 
-// TODO(sadovsky): Use a query for better performance. In theory it's possible
-// to query based on row key regexp.
-define('getLists', function(ctx, cb) {
+// Returns list objects without 'sg' fields.
+// TODO(sadovsky): Use a query for better performance. It should be possible to
+// query based on row key regexp.
+define('getListsOnly_', function(ctx, cb) {
   this.getRows_(ctx, null, function(err, rows) {
     if (err) return cb(err);
     var lists = [];
@@ -160,29 +157,27 @@ define('getLists', function(ctx, cb) {
   });
 });
 
-define('getListsWithSyncGroups', function(ctx, cb) {
+// Returns a list of objects describing SyncGroups.
+// TODO(sadovsky): Would be nice if this could be done with a single RPC.
+define('getSyncGroups_', function(ctx, cb) {
+  var that = this;
+  this.db_.getSyncGroupNames(ctx, function(err, sgNames) {
+    if (err) return cb(err);
+    async.map(sgNames, function(sgName, cb) {
+      that.getSyncGroup_(ctx, that.sgNameToListId_(sgName), cb);
+    }, cb);
+  });
+});
+
+// Returns list objects with 'sg' fields.
+define('getLists', function(ctx, cb) {
   var that = this;
   async.parallel([
     function(cb) {
-      that.getLists(ctx, cb);
+      that.getListsOnly_(ctx, cb);
     },
-    // Returns a list of SG objects (from getSyncGroup), one per SG.
-    // TODO(sadovsky): Would be nice if Syncbase could provide more info in a
-    // single RPC.
     function(cb) {
-      bm.logFn('getSyncGroupNames', cb);
-      // FIXME: Remove this hack once db.getSyncGroupNames, sg.getSpec, and
-      // sg.getMembers are implemented.
-      /* jshint -W027 */
-      return process.nextTick(function() {
-        cb(null, []);
-      });
-      that.db_.getSyncGroupNames(ctx, function(err, sgNames) {
-        if (err) return cb(err);
-        async.map(sgNames, function(sgName, cb) {
-          that.getSyncGroup(ctx, that.sgNameToListId_(sgName), cb);
-        }, cb);
-      });
+      that.getSyncGroups_(ctx, cb);
     }
   ], function(err, results) {
     if (err) return cb(err);
@@ -191,8 +186,8 @@ define('getListsWithSyncGroups', function(ctx, cb) {
     _.forEach(lists, function(list) {
       var listId = list._id;
       _.forEach(sgs, function(sg) {
-        console.assert(sg.spec.Prefixes.length === 1);
-        if (listId === sg.spec.Prefixes[0]) {
+        console.assert(sg.spec.prefixes.length === 1);
+        if (listId === sg.spec.prefixes[0].slice(3)) {  // drop 'tb:' prefix
           list.sg = sg;
         }
       });
@@ -306,32 +301,43 @@ define('removeTag', function(ctx, todoId, tag, cb) {
 // We use <app>/<db>/<table>/<listId> for the suffix part.
 
 SyncbaseDispatcher.prototype.sgNameToListId_ = function(sgName) {
-  return sgName.replace(new RegExp('.*/$sync/todos/db/tb/'), '');
+  return sgName.replace(new RegExp('.*/\\$sync/todos/db/tb/'), '');
 };
 
 SyncbaseDispatcher.prototype.listIdToSgName_ = function(listId) {
-  var prefix = this.tb_.fullName.replace('/todos/db/tb/',
-                                         '/$sync/todos/db/tb/');
-  return prefix + listId;
+  var prefix = this.tb_.fullName.replace('/todos/db/tb',
+                                         '/$sync/todos/db/tb');
+  return prefix + '/' + listId;
 };
 
-// Returns spec and members for the given list.
-define('getSyncGroup', function(ctx, listId, cb) {
-  var sg = this.db_.syncGroup(this.listIdToSgName_(listId));
+// Returns an object describing the SyncGroup for the given list id.
+// Currently, this object will have just one field, 'spec'.
+define('getSyncGroup_', function(ctx, listId, cb) {
+  var sgName = this.listIdToSgName_(listId), sg = this.db_.syncGroup(sgName);
   async.parallel([
     function(cb) {
-      sg.getSpec(ctx, cb);
+      sg.getSpec(ctx, function(err, spec, version) {
+        if (err) return cb(err);
+        cb(null, spec);
+      });
     },
     function(cb) {
-      sg.getMembers(ctx, cb);
+      // TODO(sadovsky): For now, in the UI we just want to show who's on the
+      // ACL for a given list, so we don't bother with getMembers. On top of
+      // that, currently getMembers returns a map of random Syncbase instance
+      // ids to SyncGroupMemberInfo structs, neither of which tell us anything
+      // useful.
+      if (true) {
+        process.nextTick(cb);
+      } else {
+        sg.getMembers(ctx, cb);
+      }
     }
   ], function(err, results) {
     if (err) return cb(err);
-    // FIXME: Convert 'members' to email addresses.
-    return {
+    cb(null, {
       spec: results[0],
-      members: _.keys(results[1])
-    };
+    });
   });
 });
 
@@ -341,16 +347,16 @@ var MEMBER_INFO = new nosql.SyncGroupMemberInfo({
   syncPriority: 8
 });
 
-define('createSyncGroup', function(ctx, listId, cb) {
-  var sg = this.db_.syncGroup(this.listIdToSgName_(listId));
+define('createSyncGroup', function(ctx, listId, blessings, cb) {
+  var sgName = this.listIdToSgName_(listId), sg = this.db_.syncGroup(sgName);
   var spec = new nosql.SyncGroupSpec({
-    // TODO(sadovsky): Make perms more restrictive.
+    // TODO(sadovsky): Maybe make perms more restrictive.
     perms: new Map([
-      ['Admin',   {'In': ['...']}],
-      ['Read',    {'In': ['...']}],
-      ['Write',   {'In': ['...']}],
-      ['Resolve', {'In': ['...']}],
-      ['Debug',   {'In': ['...']}]
+      ['Admin',   {'in': blessings}],
+      ['Read',    {'in': blessings}],
+      ['Write',   {'in': blessings}],
+      ['Resolve', {'in': blessings}],
+      ['Debug',   {'in': blessings}]
     ]),
     // TODO(sadovsky): Update this once we switch to {table, prefix} tuples.
     prefixes: ['tb:' + listId]
@@ -359,7 +365,7 @@ define('createSyncGroup', function(ctx, listId, cb) {
 });
 
 define('joinSyncGroup', function(ctx, listId, cb) {
-  var sg = this.db_.syncGroup(this.listIdToSgName_(listId));
+  var sgName = this.listIdToSgName_(listId), sg = this.db_.syncGroup(sgName);
   sg.join(ctx, MEMBER_INFO, this.maybeEmit_(cb));
 });
 
@@ -369,6 +375,8 @@ define('joinSyncGroup', function(ctx, listId, cb) {
 // DO NOT USE THIS. vtrace RPCs are extremely slow in JavaScript because VOM
 // decoding is slow for trace records, which are deeply nested. E.g. 100 puts
 // can take 20+ seconds with vtrace vs. 2 seconds without.
+// EDIT: It might not be quite that bad - the "20+ seconds" cited above might
+// also include the latency added by having the Chrome dev console open.
 SyncbaseDispatcher.prototype.resetTraceRecords = function() {
   this.ctx_ = vtrace.withNewStore(this.rt_.getContext());
   vtrace.getStore(this.ctx_).setCollectRegexp('.*');
@@ -397,7 +405,7 @@ function watchKey(listId) {
 }
 
 var seq = 0;  // for our own writes
-var prevWatchVersions = {};  // map of list id to version string
+var prevVersions = null;  // map of list id to version string
 
 // Increments stored seq for this client.
 define('bumpSeq_', function(ctx, listId, cb) {
@@ -422,10 +430,10 @@ define('getWatchSeqMap_', function(ctx, listId, cb) {
 // Returns true if any data has arrived via sync, false if not.
 define('checkForChanges_', function(ctx, cb) {
   var that = this;
-  this.getLists(ctx, function(err, lists) {
+  this.getListsOnly_(ctx, function(err, lists) {
     if (err) return cb(err);
     // Build a map of list id to current version.
-    var currWatchVersions = {};
+    var currVersions = {};
     var listIds = _.pluck(lists, '_id');
     async.each(listIds, function(listId, cb) {
       that.getWatchSeqMap_(ctx, listId, function(err, seqMap) {
@@ -435,14 +443,14 @@ define('checkForChanges_', function(ctx, cb) {
         var strs = _.map(seqMap, function(v, k) {
           return k + ':' + v;
         });
-        currWatchVersions[listId] = strs.sort().join(',');
+        currVersions[listId] = strs.sort().join(',');
         cb();
       });
     }, function(err) {
       if (err) return cb(err);
       // Note that _.isEqual performs a deep comparison.
-      var changed = !_.isEqual(currWatchVersions, prevWatchVersions);
-      prevWatchVersions = currWatchVersions;
+      var changed = prevVersions && !_.isEqual(currVersions, prevVersions);
+      prevVersions = currVersions;
       cb(null, changed);
     });
   });
@@ -467,8 +475,7 @@ SyncbaseDispatcher.prototype.watchLoop_ = function() {
 ////////////////////////////////////////
 // Internal helpers
 
-// TODO(sadovsky): Watch for changes on Syncbase itself so that we can detect
-// when data arrives via sync, and drop this method.
+// TODO(sadovsky): Drop this method once we have client watch.
 SyncbaseDispatcher.prototype.maybeEmit_ = function(cb, key) {
   var that = this;
   cb = cb || noop;

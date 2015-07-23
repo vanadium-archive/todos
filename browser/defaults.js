@@ -84,8 +84,6 @@ exports.initSyncbaseDispatcher = function(rt, name, benchmark, cb) {
   var service = syncbase.newService(name);
   var app = service.app('todos'), db = app.noSqlDatabase('db');
   var disp = new SyncbaseDispatcher(rt, db);
-  // TODO(sadovsky): Check that the VC (and discharge, etc.) for this RPC is
-  // reused for all subsequent RPCs.
   app.create(wt(ctx), {}, function(err) {
     if (err) {
       if (err instanceof verror.ExistError) {
@@ -103,6 +101,10 @@ exports.initSyncbaseDispatcher = function(rt, name, benchmark, cb) {
       db.createTable(wt(ctx), 'tb', {}, function(err) {
         if (err) return cb(err);
         if (benchmark) {
+          // TODO(sadovsky): Restructure things so that we still call initData
+          // even if on the first page load we ran the benchmark. Maybe do this
+          // by having the benchmark use a completely different app and/or
+          // database.
           return bm.runBenchmark(ctx, db, cb);
         }
         console.log('hierarchy created; writing rows');
