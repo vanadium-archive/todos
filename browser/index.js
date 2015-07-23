@@ -13,7 +13,8 @@ var vanadium = require('vanadium');
 var bm = require('./benchmark');
 var defaults = require('./defaults');
 var domLog = require('./dom_log');
-var h = require('./util').h;
+var util = require('./util');
+var h = util.h;
 
 ////////////////////////////////////////
 // Constants
@@ -37,7 +38,7 @@ var u = url.parse(window.location.href, true);
 function noop() {}
 
 function initVanadium(cb) {
-  cb = bm.logFn('initVanadium', cb);
+  cb = util.logFn('initVanadium', cb);
   var vanadiumConfig = {
     logLevel: vanadium.vlog.levels.INFO,
     namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
@@ -46,7 +47,7 @@ function initVanadium(cb) {
   vanadium.init(vanadiumConfig, cb);
 }
 
-function initDispatcher(dispType, syncbaseName, benchmark, cb) {
+function initDispatcher(dispType, syncbaseName, cb) {
   var clientCb = cb;
   cb = function(err, resDisp) {
     if (err) return clientCb(err);
@@ -54,13 +55,12 @@ function initDispatcher(dispType, syncbaseName, benchmark, cb) {
     clientCb();
   };
   if (dispType === DISP_TYPE_COLLECTION) {
-    console.assert(!benchmark);
     defaults.initCollectionDispatcher(cb);
   } else if (dispType === DISP_TYPE_SYNCBASE) {
     initVanadium(function(err, rt) {
       if (err) return cb(err);
       userEmail = blessingToEmail(rt.accountName);
-      defaults.initSyncbaseDispatcher(rt, syncbaseName, benchmark, cb);
+      defaults.initSyncbaseDispatcher(rt, syncbaseName, cb);
     });
   } else {
     process.nextTick(function() {
@@ -401,12 +401,12 @@ var StatusPane = React.createFactory(React.createClass({
           if (shared) {
             // TODO(sadovsky): Let the user add members to an existing SG once
             // Syncbase supports it.
-            console.error('Cannot add members to existing SyncGroup.');
+            alert('Cannot add members to an existing SyncGroup.');
             return;
           }
           // TODO(sadovsky): Better input validation.
           if (!value.includes('@') || !value.includes('.')) {
-            console.error('Invalid email address.');
+            alert('Invalid email address.');
             return;
           }
           disp.createSyncGroup(list._id, [
@@ -531,18 +531,22 @@ var Page = React.createFactory(React.createClass({
   },
   componentWillMount: function() {
     var that = this, props = this.props;
-    var dt = props.dispType, sn = props.syncbaseName, bm = props.benchmark;
+    if (props.benchmark) {
+      initVanadium(function(err, rt) {
+        if (err) throw err;
+        bm.runBenchmark(rt, props.syncbaseName, function(err) {
+          if (err) throw err;
+        });
+      });
+      return;
+    }
     function done() {
       that.setState({dispInitialized: true});
     }
-    initDispatcher(dt, sn, bm, function(err) {
+    initDispatcher(props.dispType, props.syncbaseName, function(err) {
       if (err) throw err;
-      if (bm) {
-        console.log('benchmark done');
-        return;
-      }
       if (props.joinListId) {
-        console.assert(dt === DISP_TYPE_SYNCBASE);
+        console.assert(props.dispType === DISP_TYPE_SYNCBASE);
         disp.joinSyncGroup(props.joinListId, function(err) {
           // Note, joinSyncGroup is a noop (no error) if the caller is already a
           // member, which is the desired behavior here.
@@ -623,7 +627,7 @@ var Page = React.createFactory(React.createClass({
     // TODO(sadovsky): Only read (and only redraw) what's needed based on what
     // changed.
     disp.on('change', function() {
-      var doneCb = bm.logFn('onChange', function(err) {
+      var doneCb = util.logFn('onChange', function(err) {
         if (err) throw err;
       });
       updateLists(function(err) {

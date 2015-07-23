@@ -7,34 +7,13 @@ var syncbase = require('syncbase');
 var nosql = syncbase.nosql;
 
 var util = require('./util');
-
-exports.logFn = logFn;
-exports.runBenchmark = runBenchmark;
+var wt = util.wt;
 
 var LOG_EVERYTHING = false;
 
-function logStart(name) {
-  console.log(name + ' start');
-  return Date.now();
-}
-
-function logStop(name, start, err) {
-  var dt = Date.now() - start;
-  console.log(name + (err ? ' FAILED after ' : ' took ') + dt + 'ms');
-  if (err) console.error(err);
-}
-
-function logFn(name, cb) {
-  var start = logStart(name);
-  return function(err) {
-    logStop(name, start, err);
-    cb.apply(null, arguments);
-  };
-}
-
 // Does n parallel puts with a common prefix, then returns the prefix.
 function doPuts(ctx, tb, n, cb) {
-  cb = logFn('doPuts', cb);
+  cb = util.logFn('doPuts', cb);
   var prefix = util.timestamp() + '.';
   async.times(100, function(n, cb) {
     // TODO(sadovsky): Remove this once we loosen Syncbase's naming rules.
@@ -51,9 +30,9 @@ function doPuts(ctx, tb, n, cb) {
   });
 }
 
-// Scans (and logs) all records with the given prefix.
+// Scans all records with the given prefix.
 function doScan(ctx, tb, prefix, cb) {
-  cb = logFn('doScan(' + prefix + ')', cb);
+  cb = util.logFn('doScan(' + prefix + ')', cb);
   var bytes = 0, streamErr = null;
   tb.scan(ctx, nosql.rowrange.prefix(prefix), function(err) {
     err = err || streamErr;
@@ -68,12 +47,18 @@ function doScan(ctx, tb, prefix, cb) {
   });
 }
 
-// Assumes table 'tb' exists.
-function runBenchmark(ctx, db, cb) {
-  cb = logFn('runBenchmark', cb);
-  var tb = db.table('tb');
-  doPuts(ctx, tb, 100, function(err, prefix) {
+// Creates a fresh hierarchy, then runs doPuts followed by doScan.
+exports.runBenchmark = function(rt, name, cb) {
+  cb = util.logFn('runBenchmark', cb);
+  var ctx = rt.getContext();
+  var s = syncbase.newService(name);
+  var appName = 'bm.' + util.uid();
+  util.createHierarchy(ctx, s, appName, 'db', 'tb', function(err, db) {
     if (err) return cb(err);
-    doScan(ctx, tb, prefix, cb);
+    var tb = db.table('tb');
+    doPuts(wt(ctx), tb, 100, function(err, prefix) {
+      if (err) return cb(err);
+      doScan(wt(ctx), tb, prefix, cb);
+    });
   });
-}
+};

@@ -20,14 +20,14 @@
 var _ = require('lodash');
 var async = require('async');
 var inherits = require('inherits');
-var randomBytes = require('randombytes');
 var syncbase = require('syncbase');
 var nosql = syncbase.nosql;
 var vanadium = require('vanadium');
 var vtrace = vanadium.vtrace;
 
-var bm = require('./benchmark');
 var Dispatcher = require('./dispatcher');
+var util = require('./util');
+var wn = util.wn, wt = util.wt;
 
 inherits(SyncbaseDispatcher, Dispatcher);
 module.exports = SyncbaseDispatcher;
@@ -61,17 +61,12 @@ function join() {
   return args.join(SEP);
 }
 
-function uuid(len) {
-  len = len || 16;
-  return randomBytes(Math.ceil(len / 2)).toString('hex').substr(0, len);
-}
-
 function newListKey() {
-  return uuid();
+  return util.uid();
 }
 
 function newTodoKey(listId) {
-  return join(listId, 'todos', uuid());
+  return join(listId, 'todos', util.uid());
 }
 
 function tagKey(todoId, tag) {
@@ -93,19 +88,6 @@ function marshal(x) {
 }
 function unmarshal(x) {
   return JSON.parse(x);
-}
-
-////////////////////////////////////////
-// Vanadium helpers
-
-// Returns a new Vanadium context object with a timeout.
-function wt(ctx, timeout) {
-  return ctx.withTimeout(timeout || 5000);
-}
-
-// Returns a new Vanadium context object with the given name.
-function wn(ctx, name) {
-  return vtrace.withNewSpan(ctx, name);
 }
 
 var SILENT = new vanadium.context.ContextKey();
@@ -131,7 +113,7 @@ function define(name, fn) {
       // to JSON, drop square brackets.
       var cb = args[args.length - 1];
       var argsStr = JSON.stringify(args.slice(1, -1)).slice(1, -1);
-      args[args.length - 1] = bm.logFn(name + '(' + argsStr + ')', cb);
+      args[args.length - 1] = util.logFn(name + '(' + argsStr + ')', cb);
     }
     return fn.apply(this, args);
   };
@@ -396,7 +378,7 @@ SyncbaseDispatcher.prototype.logTraceRecords = function() {
 // Random number, used to implement watch. Each client writes to their own watch
 // key to signify that they've written new data, and each client periodically
 // polls all watch keys to see if anything has changed.
-var clientId = uuid();
+var clientId = util.uid();
 function watchPrefix(listId) {
   return join(listId, 'watch');
 }

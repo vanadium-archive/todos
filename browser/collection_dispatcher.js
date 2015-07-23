@@ -67,6 +67,7 @@ CollectionDispatcher.prototype.maybeEmit_ = function(cb) {
   cb = cb || noop;
   return function(err) {
     cb.apply(null, arguments);
-    if (!err) that.emit('change');
+    if (err) return;
+    that.emit('change');
   };
 };

@@ -31,7 +31,7 @@ exports.init = function() {
   window.onerror = function(errorMsg, url, lineNumber) {
     var args = [util.timestamp(), errorMsg];
     append('msg error', args.join(' '));
-    // Show log if it's not already visible, so that the developer sees the
+    // Show the log if it's not already visible, so that the developer sees the
     // error.
     logEl.classList.add('visible');
   };
