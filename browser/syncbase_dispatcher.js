@@ -146,7 +146,7 @@ define('getSyncGroups_', function(ctx, cb) {
   this.db_.getSyncGroupNames(ctx, function(err, sgNames) {
     if (err) return cb(err);
     async.map(sgNames, function(sgName, cb) {
-      that.getSyncGroup_(ctx, that.sgNameToListId_(sgName), cb);
+      that.getSyncGroup_(ctx, sgName, cb);
     }, cb);
   });
 });
@@ -282,20 +282,22 @@ define('removeTag', function(ctx, todoId, tag, cb) {
 // Currently, SG names must be of the form <syncbaseName>/$sync/<suffix>.
 // We use <app>/<db>/<table>/<listId> for the suffix part.
 
-SyncbaseDispatcher.prototype.sgNameToListId_ = function(sgName) {
+SyncbaseDispatcher.prototype.sgNameToListId = function(sgName) {
   return sgName.replace(new RegExp('.*/\\$sync/todos/db/tb/'), '');
 };
 
-SyncbaseDispatcher.prototype.listIdToSgName_ = function(listId) {
-  var prefix = this.tb_.fullName.replace('/todos/db/tb',
-                                         '/$sync/todos/db/tb');
+SyncbaseDispatcher.prototype.listIdToSgName = function(listId) {
+  // TODO(sadovsky): fullName doesn't include the mount table name, i.e. the
+  // part corresponding to namespaceRoots. Our workaround is to specify a
+  // fully-qualified Syncbase name.
+  var prefix = this.tb_.fullName.replace('/todos/db/tb', '/$sync/todos/db/tb');
   return prefix + '/' + listId;
 };
 
-// Returns an object describing the SyncGroup for the given list id.
-// Currently, this object will have just one field, 'spec'.
-define('getSyncGroup_', function(ctx, listId, cb) {
-  var sgName = this.listIdToSgName_(listId), sg = this.db_.syncGroup(sgName);
+// Returns an object describing the SyncGroup with the given name.
+// Currently, this object will have two fields: 'name' and 'spec'.
+define('getSyncGroup_', function(ctx, sgName, cb) {
+  var sg = this.db_.syncGroup(sgName);
   async.parallel([
     function(cb) {
       sg.getSpec(ctx, function(err, spec, version) {
@@ -318,7 +320,8 @@ define('getSyncGroup_', function(ctx, listId, cb) {
   ], function(err, results) {
     if (err) return cb(err);
     cb(null, {
-      spec: results[0],
+      name: sgName,
+      spec: results[0]
     });
   });
 });
@@ -329,8 +332,8 @@ var MEMBER_INFO = new nosql.SyncGroupMemberInfo({
   syncPriority: 8
 });
 
-define('createSyncGroup', function(ctx, listId, blessings, cb) {
-  var sgName = this.listIdToSgName_(listId), sg = this.db_.syncGroup(sgName);
+define('createSyncGroup', function(ctx, sgName, blessings, mt, cb) {
+  var sg = this.db_.syncGroup(sgName);
   var spec = new nosql.SyncGroupSpec({
     // TODO(sadovsky): Maybe make perms more restrictive.
     perms: new Map([
@@ -341,13 +344,14 @@ define('createSyncGroup', function(ctx, listId, blessings, cb) {
       ['Debug',   {'in': blessings}]
     ]),
     // TODO(sadovsky): Update this once we switch to {table, prefix} tuples.
-    prefixes: ['tb:' + listId]
+    prefixes: ['tb:' + this.sgNameToListId(sgName)],
+    mountTables: [vanadium.naming.join(mt, 'rendezvous')]
   });
   sg.create(ctx, spec, MEMBER_INFO, this.maybeEmit_(cb));
 });
 
-define('joinSyncGroup', function(ctx, listId, cb) {
-  var sgName = this.listIdToSgName_(listId), sg = this.db_.syncGroup(sgName);
+define('joinSyncGroup', function(ctx, sgName, cb) {
+  var sg = this.db_.syncGroup(sgName);
   sg.join(ctx, MEMBER_INFO, this.maybeEmit_(cb));
 });
 

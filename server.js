@@ -16,6 +16,6 @@ app.get('*', function(req, res) {
   res.sendFile(pathTo('public/index.html'));
 });
 
-var server = app.listen(4000, function() {
+var server = app.listen(process.env.PORT || 4000, function() {
   console.log('Serving http://localhost:%d', server.address().port);
 });

@@ -36,6 +36,14 @@ exports.uid = function(len) {
   return randomBytes(Math.ceil(len / 2)).toString('hex').substr(0, len);
 };
 
+// Converts from binary to hex-encoded string and vice versa.
+exports.strToHex = function(s) {
+  return new Buffer(s, 'binary').toString('hex');
+}
+exports.hexToStr = function(s) {
+  return new Buffer(s, 'hex').toString('binary');
+}
+
 function logStart(name) {
   console.log(name + ' start');
   return Date.now();

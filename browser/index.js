@@ -21,7 +21,6 @@ var h = util.h;
 
 var DISP_TYPE_COLLECTION = 'mem-collection';
 var DISP_TYPE_SYNCBASE = 'syncbase';
-var SYNCBASE_NAME = '/localhost:8200';  // default value
 
 ////////////////////////////////////////
 // Global state
@@ -32,6 +31,16 @@ var disp, userEmail;
 // Used for query params.
 var u = url.parse(window.location.href, true);
 
+// Mount table name.
+var mt = u.query.mt || (function() {
+  var loc = window.location;
+  return '/' + loc.hostname + ':' + (Number(loc.port) + 1);
+}());
+
+// See TODO in SyncbaseDispatcher.listIdToSgName to understand why we use an
+// absolute name here.
+var syncbaseName = u.query.sb || (mt + '/syncbase');
+
 ////////////////////////////////////////
 // Helpers
 
@@ -41,7 +50,7 @@ function initVanadium(cb) {
   cb = util.logFn('initVanadium', cb);
   var vanadiumConfig = {
     logLevel: vanadium.vlog.levels.INFO,
-    namespaceRoots: u.query.mounttable ? [u.query.mounttable] : undefined,
+    namespaceRoots: [mt],
     proxy: u.query.proxy
   };
   vanadium.init(vanadiumConfig, cb);
@@ -381,8 +390,12 @@ var StatusPane = React.createFactory(React.createClass({
   },
   render: function() {
     var that = this, list = this.props.list, shared = Boolean(list.sg);
-    var loc = window.location;
-    var shareUrl = loc.origin + '/share/' + list._id + loc.search;
+    var shareUrl;
+    if (shared) {
+      var encodedSgName = util.strToHex(list.sg.name);
+      var loc = window.location;
+      shareUrl = loc.origin + '/share/' + encodedSgName + loc.search;
+    }
     return h('div#status-pane', {
       onClick: function(e) {
         e.stopPropagation();
@@ -409,10 +422,10 @@ var StatusPane = React.createFactory(React.createClass({
             alert('Invalid email address.');
             return;
           }
-          disp.createSyncGroup(list._id, [
+          disp.createSyncGroup(disp.listIdToSgName(list._id), [
             emailToBlessing(userEmail),
             emailToBlessing(value)
-          ]);
+          ], mt);
         },
         cancel: function(e) {
           e.target.value = '';
@@ -521,13 +534,55 @@ var Page = React.createFactory(React.createClass({
   },
   setListId_: function(listId) {
     if (listId === this.state.listId) return;
-    this.setState({listId: listId, tagFilter: null});
+    this.setState({
+      listId: listId,
+      tagFilter: null
+    });
   },
   updateURL: function() {
     var listId = this.state.listId;
     var pathname = !listId ? '/' : '/lists/' + listId;
     // Note, this doesn't trigger a re-render; it's purely visual.
     window.history.replaceState({}, '', pathname + window.location.search);
+  },
+  // Updates state.lists. Calls cb once the setState call has completed.
+  // TODO(sadovsky): If possible, simplify how we deal with concurrent state
+  // updates, here and elsewhere. The current approach is fairly subtle and
+  // error-prone. Our goal is simple: never show stale data, even in the
+  // presence of sync.
+  updateLists_: function(cb) {
+    var that = this;
+    var listsSeq = this.state.lists.seq + 1;
+    this.getLists_(function(err, lists) {
+      if (err) return cb(err);
+      // Use setState(cb) form to ensure atomicity.
+      // References: https://goo.gl/CZ82Vp and https://goo.gl/vVCp8B
+      that.setState(function(state) {
+        if (listsSeq <= state.lists.seq) {
+          return {};
+        }
+        return {lists: {seq: listsSeq, items: lists}};
+      }, cb);
+    });
+  },
+  // Updates state.todos[listId]. Calls cb once the setState call has completed.
+  updateTodos_: function(listId, cb) {
+    var that = this;
+    var stateTodos = this.state.todos[listId];
+    var todosSeq = (stateTodos ? stateTodos.seq : 0) + 1;
+    this.getTodos_(listId, function(err, todos) {
+      if (err) return cb(err);
+      // Use setState(cb) form to ensure atomicity.
+      // References: https://goo.gl/CZ82Vp and https://goo.gl/vVCp8B
+      that.setState(function(state) {
+        var stateTodos = state.todos[listId];
+        if (stateTodos && todosSeq <= stateTodos.seq) {
+          return {};
+        }
+        state.todos[listId] = {seq: todosSeq, items: todos};
+        return {todos: state.todos};
+      }, cb);
+    });
   },
   componentWillMount: function() {
     var that = this, props = this.props;
@@ -540,22 +595,26 @@ var Page = React.createFactory(React.createClass({
       });
       return;
     }
-    function done() {
-      that.setState({dispInitialized: true});
-    }
     initDispatcher(props.dispType, props.syncbaseName, function(err) {
       if (err) throw err;
-      if (props.joinListId) {
+      that.setState({dispInitialized: true}, function() {
+        if (!props.joinSgName) return;
+        // TODO(sadovsky): Show "please wait..." modal?
         console.assert(props.dispType === DISP_TYPE_SYNCBASE);
-        disp.joinSyncGroup(props.joinListId, function(err) {
+        disp.joinSyncGroup(props.joinSgName, function(err) {
           // Note, joinSyncGroup is a noop (no error) if the caller is already a
           // member, which is the desired behavior here.
           if (err) throw err;
-          done();
+          var listId = disp.sgNameToListId(props.joinSgName);
+          // TODO(sadovsky): Wait for all items to get synced before attempting
+          // to read them?
+          that.updateTodos_(listId, function(err) {
+            if (err) throw err;
+            // Note, componentDidUpdate() will update the url.
+            that.setState({listId: listId});
+          });
         });
-      } else {
-        done();
-      }
+      });
     });
   },
   componentDidMount: function() {
@@ -584,62 +643,22 @@ var Page = React.createFactory(React.createClass({
       return listId;
     }
 
-    // Updates lists. Calls cb once the setState call has completed.
-    // TODO(sadovsky): If possible, simplify how we deal with concurrent state
-    // updates, here and elsewhere. The current approach is fairly subtle and
-    // error-prone. Our goal is simple: never show stale data, even in the
-    // presence of sync.
-    function updateLists(cb) {
-      var listsSeq = that.state.lists.seq + 1;
-      that.getLists_(function(err, lists) {
-        if (err) return cb(err);
-        // Use setState(cb) form to ensure atomicity.
-        // References: https://goo.gl/CZ82Vp and https://goo.gl/vVCp8B
-        that.setState(function(state) {
-          if (listsSeq <= state.lists.seq) {
-            return {};
-          }
-          return {lists: {seq: listsSeq, items: lists}};
-        }, cb);
-      });
-    }
-
-    // Updates todos for the specified list. Calls cb once the setState call
-    // has completed.
-    function updateTodos(listId, cb) {
-      var stateTodos = that.state.todos[listId];
-      var todosSeq = (stateTodos ? stateTodos.seq : 0) + 1;
-      that.getTodos_(listId, function(err, todos) {
-        if (err) return cb(err);
-        // Use setState(cb) form to ensure atomicity.
-        // https://goo.gl/CZ82Vp
-        that.setState(function(state) {
-          var stateTodos = state.todos[listId];
-          if (stateTodos && todosSeq <= stateTodos.seq) {
-            return {};
-          }
-          state.todos[listId] = {seq: todosSeq, items: todos};
-          return {todos: state.todos};
-        }, cb);
-      });
-    }
-
     // TODO(sadovsky): Only read (and only redraw) what's needed based on what
     // changed.
     disp.on('change', function() {
       var doneCb = util.logFn('onChange', function(err) {
         if (err) throw err;
       });
-      updateLists(function(err) {
+      that.updateLists_(function(err) {
         if (err) throw err;
         var listId = getListId();
-        updateTodos(listId, doneCb);
+        that.updateTodos_(listId, doneCb);
       });
     });
 
     // Load initial lists and todos. Note that changes can come in concurrently
     // via sync.
-    updateLists(function(err) {
+    this.updateLists_(function(err) {
       if (err) throw err;
       // Set initial listId if needed.
       var listId = getListId();
@@ -648,7 +667,9 @@ var Page = React.createFactory(React.createClass({
       }
       // Get todos for all lists.
       var listIds = _.pluck(that.state.lists.items, '_id');
-      async.each(listIds, updateTodos, function(err) {
+      async.each(listIds, function(listId, cb) {
+        that.updateTodos_(listId, cb);
+      }, function(err) {
         if (err) throw err;
       });
     });
@@ -671,7 +692,7 @@ var Page = React.createFactory(React.createClass({
           if (that.props.dispType === DISP_TYPE_SYNCBASE) {
             newDispType = DISP_TYPE_COLLECTION;
           }
-          window.location.href = '/?d=' + newDispType + '&n=' + SYNCBASE_NAME;
+          window.location.replace('/?d=' + newDispType);
         }
       }),
       ListsPane({
@@ -688,9 +709,7 @@ var Page = React.createFactory(React.createClass({
           // Note, setState just schedules render, so setListId's state update
           // will be merged with ours.
           that.setListId_(listId);
-          that.setState({
-            showStatusDialog: true
-          });
+          that.setState({showStatusDialog: true});
         }
       }),
       h('div#tags-and-todos-pane', {key: 'tags-and-todos-pane'}, [
@@ -727,32 +746,25 @@ var Page = React.createFactory(React.createClass({
 // visibility of the log.
 domLog.init();
 
-function render(listId, doJoin) {
-  var dispType = u.query.d || DISP_TYPE_COLLECTION;
-  var syncbaseName = u.query.n || SYNCBASE_NAME;
-  var benchmark = Boolean(u.query.bm);
-  var props = {
-    initialListId: listId,
-    dispType: dispType,
+function render(props) {
+  props = _.assign({
+    dispType: u.query.d || DISP_TYPE_COLLECTION,
     syncbaseName: syncbaseName,
-    benchmark: benchmark
-  };
-  if (doJoin) {
-    props.joinListId = listId;
-  }
+    benchmark: Boolean(u.query.bm)
+  }, props);
   React.render(Page(props), document.querySelector('#page'));
 }
 
 // Configure Page.js routes. Note, ctx here is a Page.js context object, not a
 // Vanadium context object.
 page('/', function(ctx) {
-  render(null, false);
+  render();
 });
 page('/lists/:listId', function(ctx) {
-  render(ctx.params.listId, false);
+  render({initialListId: ctx.params.listId});
 });
-page('/share/:listId', function(ctx) {
-  render(ctx.params.listId, true);
+page('/share/:encodedSgName', function(ctx) {
+  render({joinSgName: util.hexToStr(ctx.params.encodedSgName)});
 });
 
 // Start Page.js router.

@@ -1,37 +1,37 @@
 # Todos app
 
-Todos is an example app that demonstrates use of [Syncbase][syncbase].
-
-Originally based on the [Meteor Todos demo app][meteor-todos].
+Todos is an example app that demonstrates use of [Syncbase][syncbase], and is
+originally based on the [Meteor Todos demo app][meteor-todos]. The high-level
+requirements for this app are [described here][requirements].
 
 ## Running the web application
 
 The commands below assume that the current working directory is
-`$V23_ROOT/experimental/projects/todosapp`.
+`$V23_ROOT/experimental/projects/todosapp` and that you've installed the
+[Vanadium Chrome extension][crx].
 
 First, build all necessary binaries.
 
     DEBUG=1 make build
 
 Next, if you haven't already, generate credentials to use for running the local
-Syncbase daemon. When prompted, specify blessing extension "syncbase". Note, the
-value of `--v23.credentials` should correspond to the `$TMPDIR` value specified
-when running `start_syncbased.sh`.
+daemons (mounttabled and syncbased). Leave the blessing extension field empty.
 
     ./bin/principal seekblessings --v23.credentials tmp/creds
 
-Next, start a local Syncbase daemon (in another terminal). Note, this script
-expects credentials in `$TMPDIR/creds`, and configures Syncbase to persist data
-under root directory `$TMPDIR/syncbase`.
+Next, start local daemons (in another terminal). This script runs mounttabled
+and syncbased at ports `$PORT+1` and `$PORT+2` respectively, and configures
+Syncbase to persist its data under `tmp/syncbase_$PORT`. It expects to find
+credentials in `tmp/creds`.
 
-    TMPDIR=tmp ./tools/start_syncbased.sh
+    PORT=4000 ./tools/start_services.sh
 
     # Or, start from a clean slate.
-    rm -rf tmp/syncbase* && TMPDIR=tmp ./tools/start_syncbased.sh
+    rm -rf tmp/syncbase* && PORT=4000 ./tools/start_services.sh
 
 Finally, start the web app.
 
-    DEBUG=1 make serve
+    DEBUG=1 PORT=4000 make serve
 
 Visit `http://localhost:4000` in your browser to access the app.
 
@@ -42,30 +42,38 @@ engine, and will not talk to Syncbase at all. To configure the app to talk to
 Syncbase, add `d=syncbase` to the url query params, or simply click the storage
 engine indicator in the top right corner to toggle it.
 
-When using Syncbase, by default the app attempts to contact the Syncbase service
-using the Vanadium object name `/localhost:8200`. To specify a different name,
-add `n=<name>` to the url query params.
+When using Syncbase, by default the app attempts to contact the Vanadium object
+name `/localhost:($PORT+1)/syncbase`, where `/localhost:($PORT+1)` is the local
+mount table name and `syncbase` is the relative name of the Syncbase service. To
+specify a different mount table name, add `mt=<name>` to the url query params,
+e.g. `mt=/localhost:5001`. To specify a different Syncbase service name, add
+`sb=<name>`, e.g. `sb=/localhost:4002`.
 
-Beware that `start_syncbased.sh` starts Syncbase with completely open ACLs. This
-is safe if Syncbase is only accessible locally (the default), but more dangerous
-if this Syncbase instance is configured to be accessible via a global mount
-table.
+Beware that `start_services.sh` starts Syncbase with completely open ACLs. This
+is safe if Syncbase is only accessible on the local network (the default), but
+more dangerous if this Syncbase instance is configured to be accessible via a
+global mount table.
 
 ## Design and implementation
 
 Todos is implemented as a single-page JavaScript web application that
-communicates with a local Syncbase daemon through the
-[Vanadium Chrome extension][crx]. The app UI is built using HTML and CSS, using
-React as a model-view framework. The high-level requirements for this app are
-[described here][requirements].
+communicates with a local Syncbase daemon through the [Vanadium Chrome
+extension][crx]. The app UI is built with HTML and CSS, using React as a
+model-view framework.
 
-The Syncbase data layout and conflict resolution scheme for this app are
-[described here][design], and the v0 sync setup is
-[described here][demo-sync-setup]. For now, when an item is deleted, any
-sub-items that were added concurrently (on some other device) are orphaned.
-Eventually, we'll GC orphaned records; for now, we don't bother. This
-orphaning-based approach enables us to use simple last-one-wins conflict
-resolution for all records stored in Syncbase.
+The data layout and conflict resolution policies for this app are [detailed
+here][design], and the v0 sync setup is [described here][demo-sync-setup]. The
+basic data layout is as follows, where `todos`, `db`, and `tb` are the Syncbase
+app, database, and table names respectively.
+
+    todos/db/tb/<listId>                               --> List
+    todos/db/tb/<listId>/todos/<todoId>                --> Todo
+    todos/db/tb/<listId>/todos/<todoId>/tags/<tagName> --> nil
+
+For now, when an item is deleted, any sub-items that were added concurrently (on
+some other device) are orphaned. Eventually, we'll GC orphaned records; for now,
+we don't bother. This orphaning-based approach enables us to use simple
+last-one-wins conflict resolution for all records stored in Syncbase.
 
 At startup, the web app checks whether its backing store (e.g. Syncbase) is
 empty; if so, it writes some todo lists to the store (see
@@ -96,21 +104,21 @@ triggering the same redraw procedure as described above.
 
 Signature
 
-    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds signature /localhost:8200
+    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds signature /localhost:4002
 
 Method call
 
-    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds call /localhost:8200 GetPermissions
-    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds call /localhost:8200/todos/db/tb Scan '""' '""'
+    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds call /localhost:4002 GetPermissions
+    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds call /localhost:4002/todos/db/tb Scan '""' '""'
 
 Glob
 
-    $V23_ROOT/release/go/bin/namespace -v23.credentials=tmp/creds glob "/localhost:8200/..."
+    $V23_ROOT/release/go/bin/namespace -v23.credentials=tmp/creds glob "/localhost:4002/..."
 
 Debug
 
-    $V23_ROOT/release/go/bin/debug -v23.credentials=tmp/creds glob "/localhost:8200/__debug/stats/rpc/server/routing-id/..."
-    $V23_ROOT/release/go/bin/debug -v23.credentials=tmp/creds stats read "/localhost:8200/__debug/stats/rpc/server/routing-id/c61964ab4c72ee522067eb6d5ddd22fc/methods/BeginBatch/latency-ms"
+    $V23_ROOT/release/go/bin/debug -v23.credentials=tmp/creds glob "/localhost:4002/__debug/stats/rpc/server/routing-id/..."
+    $V23_ROOT/release/go/bin/debug -v23.credentials=tmp/creds stats read "/localhost:4002/__debug/stats/rpc/server/routing-id/c61964ab4c72ee522067eb6d5ddd22fc/methods/BeginBatch/latency-ms"
 
 ### Integration test setup
 
@@ -130,25 +138,18 @@ syncbase as follows.
 
     $V23_ROOT/release/go/bin/namespace -v23.credentials=/usr/local/google/home/sadovsky/vanadium/roadmap/javascript/syncbase/tmp/test-credentials glob "/@5@ws@127.0.0.1:41249@7d24de5a57f6532b184562654ad2c554@m@test/child@@/test/syncbased/..."
 
-Visit `http://localhost:4000/?d=syncbase&n=test/syncbased` in the launched
+Visit `http://localhost:4000/?d=syncbase&sb=test/syncbased` in the launched
 Chrome instance to talk to your test syncbase.
 
-To run a simple benchmark (100 puts, followed by a scan of those rows), specify
-query param `bm=1`.
+### Performance benchmarking
 
-### Benchmark performance
+To run a simple benchmark (parallel 100 puts, followed by a scan of those rows),
+specify query param `bm=1`.
 
 All numbers assume dev console is closed, and assume non-test setup as described
 above.
 
-Currently, parallel 100 puts takes 4s, and scanning 100 rows takes 0.6s.
-
-For the puts, avoiding unnecessarily cautious Signature RPC and avoiding 2x
-blowup from unnecessary Resolve calls will help. Parallelism doesn't help as
-much as one would hope, need to understand why.
-
-For the scan, 100ms comes from JS encode/decode, and probably much of the rest
-from WSPR. Needs further digging.
+Currently, parallel 100 puts takes 700ms, and scanning 100 rows takes 300ms.
 
 [syncbase]: https://docs.google.com/document/d/12wS_IEPf8HTE7598fcmlN-Y692OWMSneoe2tvyBEpi0/edit#
 [crx]: https://v.io/tools/vanadium-chrome-extension.html

@@ -40,9 +40,12 @@ endef
 
 .DELETE_ON_ERROR:
 
+# Builds mounttabled, principal, and syncbased.
 bin: $(shell $(FIND) $(V23_ROOT) -name "*.go")
+	v23 go build -a -o $@/mounttabled v.io/x/ref/services/mounttable/mounttabled
 	v23 go build -a -o $@/principal v.io/x/ref/cmd/principal
 	v23 go build -a -o $@/syncbased v.io/syncbase/x/ref/services/syncbase/syncbased
+	touch $@
 
 node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase/{package.json,src} $(V23_ROOT)/release/javascript/core/{package.json,src})
 	npm prune
