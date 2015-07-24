@@ -17,5 +17,6 @@ app.get('*', function(req, res) {
 });
 
 var server = app.listen(process.env.PORT || 4000, function() {
-  console.log('Serving http://localhost:%d', server.address().port);
+  var hostname = require('my-local-ip')();
+  console.log('Serving http://%s:%d', hostname, server.address().port);
 });

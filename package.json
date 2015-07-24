@@ -18,6 +18,7 @@
     "express": "^4.12.4",
     "inherits": "^2.0.1",
     "lodash": "^3.9.3",
+    "my-local-ip": "^1.0.0",
     "node-uuid": "^1.4.3",
     "page": "^1.6.3",
     "randombytes": "^2.0.1",

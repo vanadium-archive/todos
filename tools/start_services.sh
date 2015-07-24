@@ -29,8 +29,8 @@ kill_child_processes() {
 main() {
   local -r TMP=tmp
   local -r PORT=${PORT-4000}
-  local -r MOUNTTABLED_ADDR="localhost:$((PORT+1))"
-  local -r SYNCBASED_ADDR="localhost:$((PORT+2))"
+  local -r MOUNTTABLED_ADDR=":$((PORT+1))"
+  local -r SYNCBASED_ADDR=":$((PORT+2))"
 
   mkdir -p $TMP
 
