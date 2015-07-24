@@ -32,14 +32,14 @@ var disp, userEmail;
 var u = url.parse(window.location.href, true);
 
 // Mount table name.
-var mt = u.query.mt || (function() {
+var mtName = u.query.mt || (function() {
   var loc = window.location;
   return '/' + loc.hostname + ':' + (Number(loc.port) + 1);
 }());
 
 // See TODO in SyncbaseDispatcher.listIdToSgName to understand why we use an
 // absolute name here.
-var syncbaseName = u.query.sb || (mt + '/syncbase');
+var syncbaseName = u.query.sb || (mtName + '/syncbase');
 
 ////////////////////////////////////////
 // Helpers
@@ -50,7 +50,7 @@ function initVanadium(cb) {
   cb = util.logFn('initVanadium', cb);
   var vanadiumConfig = {
     logLevel: vanadium.vlog.levels.INFO,
-    namespaceRoots: [mt],
+    namespaceRoots: [mtName],
     proxy: u.query.proxy
   };
   vanadium.init(vanadiumConfig, cb);
@@ -76,6 +76,12 @@ function initDispatcher(dispType, syncbaseName, cb) {
       cb(new Error('unknown dispType: ' + dispType));
     });
   }
+}
+
+function alertOnError(err) {
+  if (!err) return;
+  alert(err);
+  throw err;
 }
 
 // HACKETY HACK
@@ -188,7 +194,7 @@ var TodoTags = React.createFactory(React.createClass({
         h('div.remove', {
           key: 'remove',
           onClick: function(e) {
-            disp.removeTag(that.props.todoId, tag);
+            disp.removeTag(that.props.todoId, tag, alertOnError);
           }
         })
       ]));
@@ -201,7 +207,7 @@ var TodoTags = React.createFactory(React.createClass({
         defaultValue: ''
       }, okCancelEvents({
         ok: function(value) {
-          disp.addTag(that.props.todoId, value);
+          disp.addTag(that.props.todoId, value, alertOnError);
           that.setState({addingTag: false});
         },
         cancel: function() {
@@ -243,7 +249,7 @@ var Todo = React.createFactory(React.createClass({
         defaultValue: todo.text
       }, okCancelEvents({
         ok: function(value) {
-          disp.editTodoText(todo._id, value);
+          disp.editTodoText(todo._id, value, alertOnError);
           that.setState({editingText: false});
         },
         cancel: function() {
@@ -263,7 +269,7 @@ var Todo = React.createFactory(React.createClass({
       h('div.destroy', {
         key: 'destroy',
         onClick: function() {
-          disp.removeTodo(todo._id);
+          disp.removeTodo(todo._id, alertOnError);
         }
       }),
       h('input.checkbox', {
@@ -271,7 +277,7 @@ var Todo = React.createFactory(React.createClass({
         type: 'checkbox',
         checked: todo.done,
         onChange: function() {
-          disp.markTodoDone(todo._id, !todo.done);
+          disp.markTodoDone(todo._id, !todo.done, alertOnError);
         }
       }),
       hDescription,
@@ -306,7 +312,7 @@ var TodosPane = React.createFactory(React.createClass({
             tags: tagFilter ? [tagFilter] : [],
             done: false,
             timestamp: Date.now()
-          });
+          }, alertOnError);
           e.target.value = '';
         }
       })))));
@@ -340,7 +346,7 @@ var List = React.createFactory(React.createClass({
         defaultValue: list.name
       }, okCancelEvents({
         ok: function(value) {
-          disp.editListName(list._id, value);
+          disp.editListName(list._id, value, alertOnError);
           that.setState({editingName: false});
         },
         cancel: function() {
@@ -425,7 +431,7 @@ var StatusPane = React.createFactory(React.createClass({
           disp.createSyncGroup(disp.listIdToSgName(list._id), [
             emailToBlessing(userEmail),
             emailToBlessing(value)
-          ], mt);
+          ], mtName, alertOnError);
         },
         cancel: function(e) {
           e.target.value = '';
@@ -480,7 +486,7 @@ var ListsPane = React.createFactory(React.createClass({
       }, okCancelEvents({
         ok: function(value, e) {
           disp.addList({name: value}, function(err, listId) {
-            if (err) throw err;
+            alertOnError(err);
             that.props.setListId(listId);
           });
           e.target.value = '';
@@ -588,15 +594,13 @@ var Page = React.createFactory(React.createClass({
     var that = this, props = this.props;
     if (props.benchmark) {
       initVanadium(function(err, rt) {
-        if (err) throw err;
-        bm.runBenchmark(rt, props.syncbaseName, function(err) {
-          if (err) throw err;
-        });
+        alertOnError(err);
+        bm.runBenchmark(rt, props.syncbaseName, alertOnError);
       });
       return;
     }
     initDispatcher(props.dispType, props.syncbaseName, function(err) {
-      if (err) throw err;
+      alertOnError(err);
       that.setState({dispInitialized: true}, function() {
         if (!props.joinSgName) return;
         // TODO(sadovsky): Show "please wait..." modal?
@@ -604,12 +608,12 @@ var Page = React.createFactory(React.createClass({
         disp.joinSyncGroup(props.joinSgName, function(err) {
           // Note, joinSyncGroup is a noop (no error) if the caller is already a
           // member, which is the desired behavior here.
-          if (err) throw err;
+          alertOnError(err);
           var listId = disp.sgNameToListId(props.joinSgName);
           // TODO(sadovsky): Wait for all items to get synced before attempting
           // to read them?
           that.updateTodos_(listId, function(err) {
-            if (err) throw err;
+            alertOnError(err);
             // Note, componentDidUpdate() will update the url.
             that.setState({listId: listId});
           });
@@ -646,20 +650,18 @@ var Page = React.createFactory(React.createClass({
     // TODO(sadovsky): Only read (and only redraw) what's needed based on what
     // changed.
     disp.on('change', function() {
-      var doneCb = util.logFn('onChange', function(err) {
-        if (err) throw err;
-      });
+      var onChangeDone = util.logFn('onChange', alertOnError);
       that.updateLists_(function(err) {
-        if (err) throw err;
+        alertOnError(err);
         var listId = getListId();
-        that.updateTodos_(listId, doneCb);
+        that.updateTodos_(listId, onChangeDone);
       });
     });
 
     // Load initial lists and todos. Note that changes can come in concurrently
     // via sync.
     this.updateLists_(function(err) {
-      if (err) throw err;
+      alertOnError(err);
       // Set initial listId if needed.
       var listId = getListId();
       if (listId !== that.state.listId) {
@@ -670,7 +672,7 @@ var Page = React.createFactory(React.createClass({
       async.each(listIds, function(listId, cb) {
         that.updateTodos_(listId, cb);
       }, function(err) {
-        if (err) throw err;
+        alertOnError(err);
       });
     });
   },
