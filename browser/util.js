@@ -39,10 +39,10 @@ exports.uid = function(len) {
 // Converts from binary to hex-encoded string and vice versa.
 exports.strToHex = function(s) {
   return new Buffer(s, 'binary').toString('hex');
-}
+};
 exports.hexToStr = function(s) {
   return new Buffer(s, 'hex').toString('binary');
-}
+};
 
 function logStart(name) {
   console.log(name + ' start');
