@@ -649,12 +649,19 @@ var Page = React.createFactory(React.createClass({
 
     // TODO(sadovsky): Only read (and only redraw) what's needed based on what
     // changed.
-    disp.on('change', function() {
+    disp.on('change', function(fromSync) {
       var onChangeDone = util.logFn('onChange', alertOnError);
       that.updateLists_(function(err) {
         alertOnError(err);
-        var listId = getListId();
-        that.updateTodos_(listId, onChangeDone);
+        if (fromSync) {
+          var listIds = _.pluck(that.state.lists.items, '_id');
+          async.each(listIds, function(listId, cb) {
+            that.updateTodos_(listId, cb);
+          }, onChangeDone);
+        } else {
+          var listId = getListId();
+          that.updateTodos_(listId, onChangeDone);
+        }
       });
     });
 

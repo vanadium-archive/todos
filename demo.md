@@ -1,10 +1,7 @@
 # Demo setup
 
 This page describes how to set things up for a demo.
-For detailed explanations of the setup steps, see [README.md](README.md).
-
-FIXME: Currently, once anything is deleted, outgoing sync permanently stops
-working.
+For detailed explanations of the app setup steps, see [README.md](README.md).
 
 ## Single-machine setup
 
@@ -23,20 +20,8 @@ Run these commands (each from its own terminal) on each reset:
 
 Open these urls:
 
-    http://localhost:5000/?d=syncbase // Alice
-    http://localhost:5100/?d=syncbase // Bob
-
-### Syncing a list
-
-1. In Alice's window, create list "Groceries".
-2. Add todo items and tags (as desired).
-3. Click the status button, then type in Bob's email address.
-4. Copy the `/share/...` part of the url to the clipboard.
-5. Switch to Bob's window.
-6. Replace everything after `localhost:5100` with the copied path, hit enter.
-7. After a second, Bob should see the synced "Groceries" list.
-8. Add, edit, and remove todos and tags to your heart's content and watch sync
-   do its magic.
+    http://<hostname>:5000/?d=syncbase // Alice
+    http://<hostname>:5100/?d=syncbase // Bob
 
 ## Two-machine setup
 
@@ -55,14 +40,25 @@ Run these commands (each from its own terminal) on each reset:
 
 Open this url:
 
-    http://localhost:5000/?d=syncbase
+    http://<hostname>:5000/?d=syncbase
 
-### Syncing a list
+## Syncing a list
 
 1. In Alice's window, create list "Groceries".
 2. Add todo items and tags (as desired).
 3. Click the status button, then type in Bob's email address.
-4. Send Bob the entire url, and have him open that url.
+4. Copy the `/share/...` part of the url. The hex suffix encodes the syncgroup
+   name, which includes Alice's mount table name.
+5. In Bob's window, replace everything after `<hostname>:5000` with the copied
+   `/share/...` path.
 5. After a second, Bob should see the synced "Groceries" list.
 6. Add, edit, and remove todos and tags to your heart's content and watch sync
    do its magic.
+
+Note, it's important to use `<hostname>` urls rather than `localhost` urls
+because the web app parses the url from which it was loaded and adds 1 to the
+port number to determine the local mount table name, which it uses as a prefix
+for all syncgroup names that it creates. If the host is `localhost:5000`, the
+app will use `/localhost:5001` as the mount table name, and remote peers will
+not be able to contact the syncgroup. If we switch to a "predefined, global
+mount table" model, this will no longer be an issue.

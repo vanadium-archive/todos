@@ -41,6 +41,8 @@ main() {
     --v23.credentials=${TMP}/creds &
 
   ./bin/syncbased \
+    --v=5 \
+    --alsologtostderr=false \
     --root-dir=${TMP}/syncbase_${PORT} \
     --name=syncbase \
     --v23.namespace.root=/${MOUNTTABLED_ADDR} \

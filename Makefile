@@ -50,18 +50,19 @@ bin: $(shell $(FIND) $(V23_ROOT) -name "*.go")
 node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase/{package.json,src} $(V23_ROOT)/release/javascript/core/{package.json,src})
 	npm prune
 	npm install
-	touch $@
 # Link the vanadium and syncbase modules from V23_ROOT.
 	rm -rf ./node_modules/{vanadium,syncbase}
 	cd "$(V23_ROOT)/release/javascript/core" && npm link
 	npm link vanadium
-	cd "$(V23_ROOT)/roadmap/javascript/syncbase" && npm link
+# Note, we run "make node_modules" in the JS syncbase repo to ensure that the
+# vanadium module is linked there.
+	cd "$(V23_ROOT)/roadmap/javascript/syncbase" && make node_modules && npm link
 	npm link syncbase
 # Note, browserify 10.2.5 and up will share the vanadium module instance between
 # todosapp and syncbase, since their node_modules symlinks point to a common
 # location.
 # https://github.com/substack/node-browserify/issues/1063
-	touch node_modules
+	touch $@
 
 public/bundle.min.css: $(shell find stylesheets) node_modules
 	lessc -sm=on stylesheets/index.less | postcss -u autoprefixer -u cssnano > $@
@@ -83,6 +84,7 @@ serve: build
 .PHONY: clean
 clean:
 	rm -rf bin node_modules public/bundle.*
+	v23 goext distclean
 
 .PHONY: lint
 lint:

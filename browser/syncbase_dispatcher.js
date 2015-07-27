@@ -23,7 +23,7 @@ var inherits = require('inherits');
 var syncbase = require('syncbase');
 var nosql = syncbase.nosql;
 var vanadium = require('vanadium');
-var vtrace = vanadium.vtrace;
+var verror = vanadium.verror, vtrace = vanadium.vtrace;
 
 var Dispatcher = require('./dispatcher');
 var util = require('./util');
@@ -332,7 +332,7 @@ var MEMBER_INFO = new nosql.SyncGroupMemberInfo({
   syncPriority: 8
 });
 
-define('createSyncGroup', function(ctx, sgName, blessings, mt, cb) {
+define('createSyncGroup', function(ctx, sgName, blessings, mtName, cb) {
   var sg = this.db_.syncGroup(sgName);
   var spec = new nosql.SyncGroupSpec({
     // TODO(sadovsky): Maybe make perms more restrictive.
@@ -345,7 +345,7 @@ define('createSyncGroup', function(ctx, sgName, blessings, mt, cb) {
     ]),
     // TODO(sadovsky): Update this once we switch to {table, prefix} tuples.
     prefixes: ['tb:' + this.sgNameToListId(sgName)],
-    mountTables: [vanadium.naming.join(mt, 'rendezvous')]
+    mountTables: [vanadium.naming.join(mtName, 'rendezvous')]
   });
   sg.create(ctx, spec, MEMBER_INFO, this.maybeEmit_(cb));
 });
@@ -452,7 +452,7 @@ SyncbaseDispatcher.prototype.watchLoop_ = function() {
       console.log('checkForChanges_ failed: ' + err);
     } else if (changed) {
       console.log('checkForChanges_ detected a change');
-      that.emit('change');
+      that.emit('change', true);
     }
     window.setTimeout(that.watchLoop_.bind(that), 500);
   });
@@ -510,7 +510,17 @@ define('update_', function(ctx, key, updateFn, cb) {
   nosql.runInBatch(ctx, this.db_, opts, function(db, cb) {
     var tb = db.table('tb');
     tb.get(wn(ctx, 'get:' + key), key, function(err, value) {
-      if (err) return cb(err);
+      if (err) {
+        if (err instanceof verror.NoExistError) {
+          // Concurrent delete, likely from a remote peer. Pretend this update
+          // never happened.
+          // TODO(sadovsky): Maybe make it so client transactions take priority
+          // over sync transactions, so that app developers don't have to worry
+          // about this concurrency scenario.
+          return cb();
+        }
+        return cb(err);
+      }
       var newValue = marshal(updateFn(unmarshal(value)));
       tb.put(wn(ctx, 'put:' + key), key, newValue, cb);
     });
