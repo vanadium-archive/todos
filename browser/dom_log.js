@@ -36,7 +36,7 @@ exports.init = function() {
     logEl.classList.add('visible');
   };
 
-  Mousetrap.bind(['ctrl+l', 'meta+l'], function() {
+  Mousetrap.bind(['ctrl+shift+l', 'meta+shift+l'], function() {
     logEl.classList.toggle('visible');
   });
 };

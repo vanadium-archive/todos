@@ -50,6 +50,12 @@ var data = [
 
 function initData(disp, cb) {
   cb = util.logFn('initData', cb);
+  if (util.DEMO) {
+    process.nextTick(function() {
+      return cb();
+    });
+    return;
+  }
   var timestamp = Date.now();
   async.each(data, function(list, cb) {
     disp.addList({name: list.name}, function(err, listId) {

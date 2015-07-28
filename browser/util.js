@@ -6,6 +6,12 @@ var randomBytes = require('randombytes');
 var React = require('react');
 var vtrace = require('vanadium').vtrace;
 
+// If true, run in "demo mode":
+// - Start from a blank slate (no predefined lists)
+// - Default to syncbase dispatcher
+// - Include "join list" input box, share list codes instead of urls
+exports.DEMO = true;
+
 exports.h = function(selector, props, children) {
   if (_.isPlainObject(props)) {
     console.assert(!props.id && !props.className);
