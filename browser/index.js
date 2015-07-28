@@ -387,6 +387,7 @@ var StatusPane = React.createFactory(React.createClass({
   displayName: 'StatusPane',
   componentDidMount: function() {
     var that = this;
+    activateInput(this.getDOMNode().querySelector('#share-input'));
     Mousetrap.bind('esc', function() {
       that.props.close();
     });
@@ -416,7 +417,7 @@ var StatusPane = React.createFactory(React.createClass({
       }
     }, h('div.status-dialog', [
       h('h3', {key: 'title'}, 'Share with others'),
-      h('input', _.assign({
+      h('input#share-input', _.assign({
         key: 'input',
         placeholder: 'Add email address',
       }, okCancelEvents({
@@ -507,7 +508,7 @@ var ListsPane = React.createFactory(React.createClass({
           placeholder: 'Join list'
         }, okCancelEvents({
           ok: function(value, e) {
-            that.props.joinSyncGroup(value, alertOnError);
+            that.props.joinSyncGroup(value.trim(), alertOnError);
             e.target.value = '';
           }
         })))));
