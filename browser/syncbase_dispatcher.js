@@ -11,6 +11,7 @@
 // orphaned records; for now, we don't bother. This orphaning-based approach
 // enables us to use simple last-one-wins conflict resolution for all records
 // stored in Syncbase.
+// NOTE: For now, we actually always orphan tags when deleting todo entries.
 //
 // TODO(sadovsky): Orphaning degrades performance, because scan responses (e.g.
 // scan to get all todos for a given list) include orphaned records.
@@ -179,24 +180,24 @@ define('getLists', function(ctx, cb) {
 });
 
 define('getTodos', function(ctx, listId, cb) {
-  this.getRows_(ctx, listId, function(err, rows) {
+  this.getRows_(ctx, join(listId, 'todos'), function(err, rows) {
     if (err) return cb(err);
     var todos = [];
     var todo = {};
     _.forEach(rows, function(row) {
       var parts = row.key.split(SEP);
-      if (parts.length < 2 || parts[0] !== listId) {
-        return;
-      } else if (parts.length === 3) {  // next todo
-        if (todo._id) {
-          todos.push(todo);
+      console.assert(parts.length >= 3 && parts[0] === listId);
+      if (parts.length === 3) {  // todo entry
+        todo = _.assign(unmarshal(row.value), {_id: row.key, tags: []});
+        todos.push(todo);
+      } else if (parts.length === 5) {  // tag for todo entry
+        var tagName = parts[4];
+        if (tagKey(todo._id, tagName) !== row.key) {
+          // Orphaned tag (from a deleted todo entry); skip.
+          // TODO(ivanpi): Garbage collect orphaned tags.
+          return;
         }
-        todo = _.assign(unmarshal(row.value), {_id: row.key});
-      } else if (parts.length === 5) {  // tag for current todo
-        if (!todo.tags) {
-          todo.tags = [];
-        }
-        todo.tags.push(parts[4]);  // push tag name
+        todo.tags.push(tagName);
       } else {
         throw new Error('bad key: ' + row.key);
       }
@@ -246,6 +247,7 @@ define('addTodo', function(ctx, listId, todo, cb) {
 });
 
 define('removeTodo', function(ctx, todoId, cb) {
+  // TODO(ivanpi): Also delete corresponding tags.
   this.tb_.row(todoId).delete(ctx, this.maybeEmit_(cb, todoId));
 });
 
@@ -480,9 +482,13 @@ SyncbaseDispatcher.prototype.maybeEmit_ = function(cb, key) {
 
 // Writes the given tag into the given table.
 define('addTagImpl_', function(ctx, tb, todoId, tag, cb) {
-  // TODO(sadovsky): Syncbase currently disallows whitespace in keys, so as a
-  // quick hack we drop all whitespace before storing tags.
-  tag = tag.replace(/\s+/g, '');
+  // TODO(sadovsky): Syncbase currently disallows most characters in keys, so
+  // as a quick hack we drop all unsavory characters before storing tags.
+  tag = tag.replace(/[^a-zA-Z0-9_.-]/g, '');  // taken from Syncbase key check
+  tag = tag.split(SEP).join('');  // also eliminate separator
+  if (tag === '') {
+    return process.nextTick(cb);
+  }
   tb.put(ctx, tagKey(todoId, tag), null, cb);
 });
 
