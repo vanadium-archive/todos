@@ -84,7 +84,7 @@ function alertOnError(err) {
   throw err;
 }
 
-// HACKETY HACK
+// HACKETY HACK for demo.
 function emailToBlessing(email) {
   return 'dev.v.io/u/' + email;
 }
@@ -291,10 +291,10 @@ var TodosPane = React.createFactory(React.createClass({
   render: function() {
     var that = this;
     var children = [];
-    // TODO(sadovsky): If there are no lists (and thus no todos), we end up
-    // rendering "Loading..." here, which is wrong.
-    if (!this.props.listId || !this.props.todos) {
-      children.push(h('div.loading', {key: 'loading'}, 'Loading...'));
+    if (!this.props.listId) {
+      children.push(h('div.msg', {key: 'msg'}, 'No list selected.'));
+    } else if (!this.props.todos) {
+      children.push(h('div.msg', {key: 'msg'}, 'Loading...'));
     } else {
       var tagFilter = this.props.tagFilter, items = [];
       _.each(this.props.todos, function(todo) {
@@ -372,7 +372,7 @@ var List = React.createFactory(React.createClass({
         }
       }, list.name)));
     }
-    return h('div.list' + (list.selected ? '.selected' : ''), {
+    return h('div.list' + (that.props.selected ? '.selected' : ''), {
       onClick: function() {
         that.props.setListId(list._id);
       },
@@ -396,11 +396,16 @@ var StatusPane = React.createFactory(React.createClass({
   },
   render: function() {
     var that = this, list = this.props.list, shared = Boolean(list.sg);
-    var shareUrl;
+    var hShare;
     if (shared) {
-      var encodedSgName = util.strToHex(list.sg.name);
-      var loc = window.location;
-      shareUrl = loc.origin + '/share/' + encodedSgName + loc.search;
+      if (util.DEMO) {
+        hShare = h('span', list.sg.name);
+      } else {
+        var loc = window.location;
+        var encodedSgName = util.strToHex(list.sg.name);
+        var shareUrl = '/share/' + encodedSgName + loc.search;
+        hShare = h('a', {href: shareUrl}, shareUrl);
+      }
     }
     return h('div#status-pane', {
       onClick: function(e) {
@@ -447,8 +452,8 @@ var StatusPane = React.createFactory(React.createClass({
         }).join(', '))
       ]),
       !shared ? null : h('div.url', {key: 'url'}, [
-        h('div.subtitle', {key: 'subtitle'}, 'URL to share with invitees'),
-        h('div.value', {key: 'value'}, h('a', {href: shareUrl}, shareUrl))
+        h('div.subtitle', {key: 'subtitle'}, 'Thing to share with invitees'),
+        h('div.value', {key: 'value'}, hShare)
       ]),
       h('div.close', {
         key: 'close',
@@ -466,21 +471,23 @@ var ListsPane = React.createFactory(React.createClass({
     var that = this;
     var children = [h('div.lists-title', {key: 'title'}, 'Todo Lists')];
     if (!this.props.lists) {
-      children.push(h('div.loading', {key: 'loading'}, 'Loading...'));
+      children.push(h('div.msg', {key: 'msg'}, 'Loading...'));
     } else {
-      var lists = [];
-      _.each(this.props.lists, function(list) {
-        list.selected = that.props.listId === list._id;
-        lists.push(List({
+      children.push(h('div', {
+        key: 'lists'
+      }, _.map(this.props.lists, function(list) {
+        return List({
           key: list._id,
           list: list,
+          selected: that.props.listId === list._id,
           useSyncbase: that.props.useSyncbase,
           setListId: that.props.setListId,
           openStatusDialog: that.props.openStatusDialog
-        }));
-      });
-      children.push(h('div', {key: 'lists'}, lists));
-      children.push(h('div.new-list', {key: 'new-list'}, h('input', _.assign({
+        });
+      })));
+      children.push(h('div.input-row', {
+        key: 'new-list'
+      }, h('input', _.assign({
         type: 'text',
         placeholder: 'New list'
       }, okCancelEvents({
@@ -492,6 +499,22 @@ var ListsPane = React.createFactory(React.createClass({
           e.target.value = '';
         }
       })))));
+      if (util.DEMO && that.props.useSyncbase) {
+        children.push(h('div.input-row', {
+          key: 'join-list'
+        }, h('input', _.assign({
+          type: 'text',
+          placeholder: 'Join list'
+        }, okCancelEvents({
+          ok: function(value, e) {
+            that.props.joinSyncGroup(value, alertOnError);
+            e.target.value = '';
+          }
+        })))));
+      }
+    }
+    if (that.props.useSyncbase) {
+      children.push(h('div.user-id', {'data-text': userEmail}, userEmail));
     }
     return h('div#lists-pane', children);
   }
@@ -590,6 +613,24 @@ var Page = React.createFactory(React.createClass({
       }, cb);
     });
   },
+  // Joins the specified syncgroup and displays the associated list.
+  joinSyncGroup_: function(sgName, cb) {
+    var that = this;
+    console.assert(this.props.dispType === DISP_TYPE_SYNCBASE);
+    disp.joinSyncGroup(sgName, function(err) {
+      // Note, joinSyncGroup is a noop (no error) if the caller is already a
+      // member, which is the desired behavior here.
+      if (err) return cb(err);
+      var listId = disp.sgNameToListId(sgName);
+      // TODO(sadovsky): Wait for all items to get synced before attempting to
+      // read them?
+      that.updateTodos_(listId, function(err) {
+        if (err) return cb(err);
+        // Note, componentDidUpdate() will update the url.
+        that.setState({listId: listId}, cb);
+      });
+    });
+  },
   componentWillMount: function() {
     var that = this, props = this.props;
     if (props.benchmark) {
@@ -602,22 +643,9 @@ var Page = React.createFactory(React.createClass({
     initDispatcher(props.dispType, props.syncbaseName, function(err) {
       alertOnError(err);
       that.setState({dispInitialized: true}, function() {
-        if (!props.joinSgName) return;
-        // TODO(sadovsky): Show "please wait..." modal?
-        console.assert(props.dispType === DISP_TYPE_SYNCBASE);
-        disp.joinSyncGroup(props.joinSgName, function(err) {
-          // Note, joinSyncGroup is a noop (no error) if the caller is already a
-          // member, which is the desired behavior here.
-          alertOnError(err);
-          var listId = disp.sgNameToListId(props.joinSgName);
-          // TODO(sadovsky): Wait for all items to get synced before attempting
-          // to read them?
-          that.updateTodos_(listId, function(err) {
-            alertOnError(err);
-            // Note, componentDidUpdate() will update the url.
-            that.setState({listId: listId});
-          });
-        });
+        if (props.joinSgName) {
+          that.joinSyncGroup_(props.joinSgName, alertOnError);
+        }
       });
     });
   },
@@ -719,6 +747,9 @@ var Page = React.createFactory(React.createClass({
           // will be merged with ours.
           that.setListId_(listId);
           that.setState({showStatusDialog: true});
+        },
+        joinSyncGroup: function(sgName, cb) {
+          that.joinSyncGroup_(sgName, cb);
         }
       }),
       h('div#tags-and-todos-pane', {key: 'tags-and-todos-pane'}, [
@@ -751,13 +782,14 @@ var Page = React.createFactory(React.createClass({
 ////////////////////////////////////////
 // Initialization
 
-// Start our DOM log module. Developers can press Ctrl+L (or Meta+L) to toggle
+// DOM log module. Developers can press Ctrl+Shift+L (or Meta+Shift+L) to toggle
 // visibility of the log.
 domLog.init();
 
 function render(props) {
+  var defaultDispType = util.DEMO ? DISP_TYPE_SYNCBASE : DISP_TYPE_COLLECTION;
   props = _.assign({
-    dispType: u.query.d || DISP_TYPE_COLLECTION,
+    dispType: u.query.d || defaultDispType,
     syncbaseName: syncbaseName,
     benchmark: Boolean(u.query.bm)
   }, props);
