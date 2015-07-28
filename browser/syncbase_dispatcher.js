@@ -124,17 +124,12 @@ function define(name, fn) {
 // SyncbaseDispatcher impl
 
 // Returns list objects without 'sg' fields.
-// TODO(sadovsky): Use a query for better performance. It should be possible to
-// query based on row key regexp.
 define('getListsOnly_', function(ctx, cb) {
-  this.getRows_(ctx, null, function(err, rows) {
+  this.getRowsQuery_(ctx, 'k not like "%' + SEP + '%"', function(err, rows) {
     if (err) return cb(err);
-    var lists = [];
-    _.forEach(rows, function(row) {
-      if (row.key.indexOf(SEP) >= 0) {
-        return;  // ignore nested (and therefore non-list) records
-      }
-      lists.push(_.assign(unmarshal(row.value), {_id: row.key}));
+    var lists = _.map(rows, function(row) {
+      console.assert(!row.key.includes(SEP));
+      return _.assign(unmarshal(row.value), {_id: row.key});
     });
     return cb(null, lists);
   });
@@ -492,7 +487,7 @@ define('addTagImpl_', function(ctx, tb, todoId, tag, cb) {
   tb.put(ctx, tagKey(todoId, tag), null, cb);
 });
 
-// Returns all rows in the table.
+// Returns all rows in the table with the given key prefix.
 define('getRows_', function(ctx, prefix, cb) {
   var rows = [], streamErr = null;
   var range = nosql.rowrange.prefix(prefix || '');
@@ -502,6 +497,22 @@ define('getRows_', function(ctx, prefix, cb) {
     cb(null, rows);
   }).on('data', function(row) {
     rows.push(row);
+  }).on('error', function(err) {
+    streamErr = streamErr || err.error;
+  });
+});
+
+// Returns all rows in the table matching the where clause.
+define('getRowsQuery_', function(ctx, where, cb) {
+  var rows = [], streamErr = null;
+  var q = 'select k, v from ' + this.tb_.name + ' where ' + where;
+  this.db_.exec(ctx, q, function(err) {
+    if (err) return cb(err);
+    if (streamErr) return cb(streamErr);
+    rows = rows.slice(1);  // remove header
+    cb(null, rows);
+  }).on('data', function(row) {
+    rows.push({key: row[0], value: row[1]});
   }).on('error', function(err) {
     streamErr = streamErr || err.error;
   });
