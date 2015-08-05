@@ -1,4 +1,5 @@
-bin
-node_modules
-public/bundle.*
-tmp
+/bin
+/creds
+/node_modules
+/public/bundle.*
+/tmp

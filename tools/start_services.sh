@@ -1,9 +1,6 @@
 #!/bin/bash
 
-# Expects credentials in tmp/creds, generated as follows:
-#
-# make build
-# ./bin/principal seekblessings --v23.credentials tmp/creds
+# Expects credentials in creds dir, generated using "make creds".
 
 set -euo pipefail
 
@@ -38,7 +35,7 @@ main() {
   # extension.
   ./bin/mounttabled \
     --v23.tcp.address=${MOUNTTABLED_ADDR} \
-    --v23.credentials=${TMP}/creds &
+    --v23.credentials=creds &
 
   ./bin/syncbased \
     --v=5 \
@@ -47,7 +44,7 @@ main() {
     --name=syncbase \
     --v23.namespace.root=/${MOUNTTABLED_ADDR} \
     --v23.tcp.address=${SYNCBASED_ADDR} \
-    --v23.credentials=${TMP}/creds \
+    --v23.credentials=creds \
     --v23.permissions.literal='{"Admin":{"In":["..."]},"Write":{"In":["..."]},"Read":{"In":["..."]},"Resolve":{"In":["..."]},"Debug":{"In":["..."]}}'
 
   tail -f /dev/null  # wait forever

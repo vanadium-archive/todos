@@ -17,17 +17,17 @@ First, build all necessary binaries.
 Next, if you haven't already, generate credentials to use for running the local
 daemons (mounttabled and syncbased). Leave the blessing extension field empty.
 
-    ./bin/principal seekblessings --v23.credentials tmp/creds
+    make creds
 
 Next, start local daemons (in another terminal). This script runs mounttabled
 and syncbased at ports `$PORT+1` and `$PORT+2` respectively, and configures
 Syncbase to persist its data under `tmp/syncbase_$PORT`. It expects to find
-credentials in `tmp/creds`.
+credentials in `creds`.
 
     PORT=4000 ./tools/start_services.sh
 
     # Or, start from a clean slate.
-    rm -rf tmp/syncbase* && PORT=4000 ./tools/start_services.sh
+    rm -rf tmp && PORT=4000 ./tools/start_services.sh
 
 Finally, start the web app.
 
@@ -104,21 +104,21 @@ triggering the same redraw procedure as described above.
 
 Signature
 
-    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds signature /localhost:4002
+    $V23_ROOT/release/go/bin/vrpc -v23.credentials=creds signature /localhost:4002
 
 Method call
 
-    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds call /localhost:4002 GetPermissions
-    $V23_ROOT/release/go/bin/vrpc -v23.credentials=tmp/creds call /localhost:4002/todos/db/tb Scan '""' '""'
+    $V23_ROOT/release/go/bin/vrpc -v23.credentials=creds call /localhost:4002 GetPermissions
+    $V23_ROOT/release/go/bin/vrpc -v23.credentials=creds call /localhost:4002/todos/db/tb Scan '""' '""'
 
 Glob
 
-    $V23_ROOT/release/go/bin/namespace -v23.credentials=tmp/creds glob "/localhost:4002/..."
+    $V23_ROOT/release/go/bin/namespace -v23.credentials=creds glob "/localhost:4002/..."
 
 Debug
 
-    $V23_ROOT/release/go/bin/debug -v23.credentials=tmp/creds glob "/localhost:4002/__debug/stats/rpc/server/routing-id/..."
-    $V23_ROOT/release/go/bin/debug -v23.credentials=tmp/creds stats read "/localhost:4002/__debug/stats/rpc/server/routing-id/c61964ab4c72ee522067eb6d5ddd22fc/methods/BeginBatch/latency-ms"
+    $V23_ROOT/release/go/bin/debug -v23.credentials=creds glob "/localhost:4002/__debug/stats/rpc/server/routing-id/..."
+    $V23_ROOT/release/go/bin/debug -v23.credentials=creds stats read "/localhost:4002/__debug/stats/rpc/server/routing-id/c61964ab4c72ee522067eb6d5ddd22fc/methods/BeginBatch/latency-ms"
 
 ### Integration test setup
 

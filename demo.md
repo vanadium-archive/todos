@@ -8,11 +8,11 @@ For detailed explanations of the app setup steps, see [README.md](README.md).
 Run these commands once:
 
     DEBUG=1 make build
-    ./bin/principal seekblessings --v23.credentials tmp/creds
+    make creds
 
 Run these commands (each from its own terminal) on each reset:
 
-    rm -rf tmp/syncbase* && PORT=5000 ./tools/start_services.sh
+    rm -rf tmp && PORT=5000 ./tools/start_services.sh
     PORT=5100 ./tools/start_services.sh
 
     DEBUG=1 PORT=5000 make serve
@@ -30,11 +30,11 @@ Have Alice and Bob do the following on their respective machines.
 Run these commands once:
 
     DEBUG=1 make build
-    ./bin/principal seekblessings --v23.credentials tmp/creds
+    make creds
 
 Run these commands (each from its own terminal) on each reset:
 
-    rm -rf tmp/syncbase* && PORT=5000 ./tools/start_services.sh
+    rm -rf tmp && PORT=5000 ./tools/start_services.sh
 
     DEBUG=1 PORT=5000 make serve
 

@@ -47,6 +47,11 @@ bin: $(shell $(FIND) $(V23_ROOT) -name "*.go")
 	v23 go build -a -o $@/syncbased v.io/syncbase/x/ref/services/syncbase/syncbased
 	touch $@
 
+# Mints credentials.
+creds: bin
+	./bin/principal seekblessings --v23.credentials creds
+	touch $@
+
 node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase/{package.json,src} $(V23_ROOT)/release/javascript/core/{package.json,src})
 	npm prune
 	npm install
@@ -64,8 +69,11 @@ node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncba
 # https://github.com/substack/node-browserify/issues/1063
 	touch $@
 
+# TODO(sadovsky): Newest cssnano appears to be broken with Vanadium's old
+# version of node, 0.10.24.
 public/bundle.min.css: $(shell find stylesheets) node_modules
-	lessc -sm=on stylesheets/index.less | postcss -u autoprefixer -u cssnano > $@
+# lessc -sm=on stylesheets/index.less | postcss -u autoprefixer -u cssnano > $@
+	lessc -sm=on stylesheets/index.less | postcss -u autoprefixer > $@
 
 public/bundle.min.js: browser/index.js $(shell find browser) node_modules
 ifdef DEBUG
