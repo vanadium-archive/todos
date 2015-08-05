@@ -180,8 +180,8 @@ var TodoTags = React.createFactory(React.createClass({
       addingTag: false
     };
   },
-  componentDidUpdate: function() {
-    if (this.state.addingTag) {
+  componentDidUpdate: function(prevProps, prevState) {
+    if (this.state.addingTag && !prevState.addingTag) {
       activateInput(this.getDOMNode().querySelector('#edittag-input'));
     }
   },
@@ -233,8 +233,8 @@ var Todo = React.createFactory(React.createClass({
       editingText: false
     };
   },
-  componentDidUpdate: function() {
-    if (this.state.editingText) {
+  componentDidUpdate: function(prevProps, prevState) {
+    if (this.state.editingText && !prevState.editingText) {
       activateInput(this.getDOMNode().querySelector('#todo-input'));
     }
   },
@@ -329,8 +329,8 @@ var List = React.createFactory(React.createClass({
       editingName: false
     };
   },
-  componentDidUpdate: function() {
-    if (this.state.editingName) {
+  componentDidUpdate: function(prevProps, prevState) {
+    if (this.state.editingName && !prevState.editingName) {
       activateInput(this.getDOMNode().querySelector('#list-name-input'));
     }
   },
