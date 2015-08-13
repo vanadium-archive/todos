@@ -1,0 +1,3 @@
+node_modules
+public/bundle.*
+third_party
