@@ -7,8 +7,8 @@ requirements for this app are [described here][requirements].
 ## Running the web application
 
 The commands below assume that the current working directory is
-`$V23_ROOT/experimental/projects/todosapp` and that you've installed the
-[Vanadium Chrome extension][crx].
+`$V23_ROOT/release/projects/todos` and that you've installed the [Vanadium
+Chrome extension][crx].
 
 First, build all necessary binaries.
 
