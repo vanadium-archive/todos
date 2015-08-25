@@ -1,9 +1,22 @@
 # Demo setup
 
 This page describes how to set things up for a demo.
+
+We assume you've followed the [contributor instructions][contrib] to install
+prerequisites and fetch the Vanadium repositories, and installed the Syncbase
+and Node.js profiles using `v23 profile install syncbase nodejs`. We also assume
+that you've installed the [Vanadium Chrome extension][crx].
+
+The commands below assume that the current working directory is
+`$V23_ROOT/release/projects/todos`.
+
 For detailed explanations of the app setup steps, see [README.md](README.md).
 
 ## Single-machine setup
+
+This setup involves a single machine running two instances of Syncbase+Webapp,
+one for Alice and one for Bob. You'll probably want to open the two Webapp
+windows side-by-side.
 
 Run these commands once:
 
@@ -24,6 +37,9 @@ Open these urls:
     http://<hostname>:5100/?d=syncbase // Bob
 
 ## Two-machine setup
+
+This setup involves two machines, one for Alice and the other for Bob. Each
+machine runs one instance of Syncbase+Webapp.
 
 Have Alice and Bob do the following on their respective machines.
 
@@ -62,3 +78,6 @@ for all syncgroup names that it creates. If the host is `localhost:5000`, the
 app will use `/localhost:5001` as the mount table name, and remote peers will
 not be able to contact the syncgroup. If we switch to a "predefined, global
 mount table" model, this will no longer be an issue.
+
+[contrib]: https://staging.v.io/community/contributing.html
+[crx]: https://v.io/tools/vanadium-chrome-extension.html

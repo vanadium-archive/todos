@@ -6,9 +6,13 @@ requirements for this app are [described here][requirements].
 
 ## Running the web application
 
+We assume you've followed the [contributor instructions][contrib] to install
+prerequisites and fetch the Vanadium repositories, and installed the Syncbase
+and Node.js profiles using `v23 profile install syncbase nodejs`. We also assume
+that you've installed the [Vanadium Chrome extension][crx].
+
 The commands below assume that the current working directory is
-`$V23_ROOT/release/projects/todos` and that you've installed the [Vanadium
-Chrome extension][crx].
+`$V23_ROOT/release/projects/todos`.
 
 First, build all necessary binaries.
 
@@ -152,8 +156,9 @@ above.
 Currently, parallel 100 puts takes 700ms, and scanning 100 rows takes 300ms.
 
 [syncbase]: https://docs.google.com/document/d/12wS_IEPf8HTE7598fcmlN-Y692OWMSneoe2tvyBEpi0/edit#
-[crx]: https://v.io/tools/vanadium-chrome-extension.html
+[meteor-todos]: https://github.com/meteor/simple-todos
 [requirements]: https://docs.google.com/document/d/13pbomPQu73Nug8RletnbkqXooPtKMCwPKW9cVYQi_jY/edit
+[contrib]: https://staging.v.io/community/contributing.html
+[crx]: https://v.io/tools/vanadium-chrome-extension.html
 [design]: https://docs.google.com/document/d/1GtBk75QmjSorUW6T6BATCoiS_LTqOrGksgqjqJ1Hiow/edit
 [demo-sync-setup]: https://docs.google.com/document/d/1174a7LIL8jnV1fN174PPV4fO74LGNLi6ODAFEp5l5Rw/edit
-[meteor-todos]: https://github.com/meteor/simple-todos

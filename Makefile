@@ -41,7 +41,7 @@ endef
 .DELETE_ON_ERROR:
 
 # Builds mounttabled, principal, and syncbased.
-bin: $(shell $(FIND) $(V23_ROOT) -name "*.go")
+bin: $(shell $(FIND) $(V23_ROOT) -name "*.go") | env-check
 	v23 go build -a -o $@/mounttabled v.io/x/ref/services/mounttable/mounttabled
 	v23 go build -a -o $@/principal v.io/x/ref/cmd/principal
 	v23 go build -a -o $@/syncbased v.io/syncbase/x/ref/services/syncbase/syncbased
@@ -52,7 +52,7 @@ creds: bin
 	./bin/principal seekblessings --v23.credentials creds
 	touch $@
 
-node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase/{package.json,src} $(V23_ROOT)/release/javascript/core/{package.json,src})
+node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase/{package.json,src} $(V23_ROOT)/release/javascript/core/{package.json,src}) | env-check
 	npm prune
 	npm install
 # Link the vanadium and syncbase modules from V23_ROOT.
@@ -88,6 +88,12 @@ build: bin node_modules public/bundle.min.css public/bundle.min.js
 .PHONY: serve
 serve: build
 	npm start
+
+.PHONY: env-check
+env-check:
+ifndef V23_ROOT
+	$(error V23_ROOT is not set.  Please install Vanadium per the contributor instructions)
+endif
 
 .PHONY: clean
 clean:
