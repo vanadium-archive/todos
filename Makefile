@@ -1,5 +1,5 @@
 SHELL := /bin/bash -euo pipefail
-export PATH := node_modules/.bin:$(V23_ROOT)/release/go/bin:$(V23_ROOT)/roadmap/go/bin:$(V23_ROOT)/third_party/cout/node/bin:$(PATH)
+export PATH := node_modules/.bin:$(V23_ROOT)/release/go/bin:$(V23_ROOT)/third_party/cout/node/bin:$(PATH)
 
 # Default browserify options: use sourcemaps.
 BROWSERIFY_OPTS := --debug
@@ -52,7 +52,7 @@ creds: bin
 	./bin/principal seekblessings --v23.credentials creds
 	touch $@
 
-node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncbase/{package.json,src} $(V23_ROOT)/release/javascript/core/{package.json,src}) | env-check
+node_modules: package.json $(shell $(FIND) $(V23_ROOT)/release/javascript/syncbase/{package.json,src} $(V23_ROOT)/release/javascript/core/{package.json,src}) | env-check
 	npm prune
 	npm install
 # Link the vanadium and syncbase modules from V23_ROOT.
@@ -61,7 +61,7 @@ node_modules: package.json $(shell $(FIND) $(V23_ROOT)/roadmap/javascript/syncba
 	npm link vanadium
 # Note, we run "make node_modules" in the JS syncbase repo to ensure that the
 # vanadium module is linked there.
-	cd "$(V23_ROOT)/roadmap/javascript/syncbase" && make node_modules && npm link
+	cd "$(V23_ROOT)/release/javascript/syncbase" && make node_modules && npm link
 	npm link syncbase
 # Note, browserify 10.2.5 and up will share the vanadium module instance between
 # todosapp and syncbase, since their node_modules symlinks point to a common

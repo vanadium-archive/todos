@@ -129,7 +129,7 @@ Debug
 For debugging performance issues, it can be helpful to use the JS integration
 test configuration. To do so, first run the integration test as follows.
 
-    cd $V23_ROOT/roadmap/javascript/syncbase
+    cd $V23_ROOT/release/javascript/syncbase
     NOQUIT=1 NOHEADLESS=1 make test-integration-browser
 
 This command starts a local mount table, identityd, and Syncbase mounted at
@@ -140,7 +140,7 @@ Scroll up in the test output to get the test environment configuration, in
 particular the mount table endpoint, `V23_NAMESPACE`. Glob the locally mounted
 syncbase as follows.
 
-    $V23_ROOT/release/go/bin/namespace -v23.credentials=/usr/local/google/home/sadovsky/vanadium/roadmap/javascript/syncbase/tmp/test-credentials glob "/@5@ws@127.0.0.1:41249@7d24de5a57f6532b184562654ad2c554@m@test/child@@/test/syncbased/..."
+    $V23_ROOT/release/go/bin/namespace -v23.credentials=/usr/local/google/home/sadovsky/vanadium/release/javascript/syncbase/tmp/test-credentials glob "/@5@ws@127.0.0.1:41249@7d24de5a57f6532b184562654ad2c554@m@test/child@@/test/syncbased/..."
 
 Visit `http://localhost:4000/?d=syncbase&sb=test/syncbased` in the launched
 Chrome instance to talk to your test syncbase.
