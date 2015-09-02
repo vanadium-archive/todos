@@ -698,6 +698,13 @@ var Page = React.createFactory(React.createClass({
       });
     });
 
+    disp.on('watchError', function(err) {
+      alertOnError(new Error(
+        'Error occurred in Syncbase watch mechanism. Data may be stale. ' +
+        'Please refresh the page.\n' + err)
+      );
+    });
+
     // Load initial lists and todos. Note that changes can come in concurrently
     // via sync.
     this.updateLists_(function(err) {
