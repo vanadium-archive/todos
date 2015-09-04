@@ -44,7 +44,7 @@ endef
 bin: $(shell $(FIND) $(V23_ROOT) -name "*.go") | env-check
 	v23 go build -a -o $@/mounttabled v.io/x/ref/services/mounttable/mounttabled
 	v23 go build -a -o $@/principal v.io/x/ref/cmd/principal
-	v23 go build -a -o $@/syncbased v.io/syncbase/x/ref/services/syncbase/syncbased
+	v23 go build -a -o $@/syncbased v.io/x/ref/services/syncbase/syncbased
 	touch $@
 
 # Mints credentials.

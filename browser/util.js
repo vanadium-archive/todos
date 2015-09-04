@@ -99,7 +99,8 @@ exports.createHierarchy = function(ctx, service, appName, dbName, tbName, cb) {
     db.create(wt(ctx), {}, logFn(dbLog, function(err) {
       if (err) return cb(err, db);
       var tbLog = 'create table "' + tbName + '"';
-      db.createTable(wt(ctx), tbName, {}, logFn(tbLog, function(err) {
+      var tb = db.table(tbName);
+      tb.create(wt(ctx), {}, logFn(tbLog, function(err) {
         if (err) return cb(err, db);
         cb(null, db);
       }));
