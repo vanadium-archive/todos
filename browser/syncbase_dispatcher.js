@@ -264,7 +264,7 @@ define('addTodo', function(ctx, listId, todo, cb) {
 
 define('removeTodo', function(ctx, todoId, cb) {
   // TODO(ivanpi): Also delete corresponding tags.
-  this.tb_.row(todoId).delete(ctx, cb);
+  this.tb_.delete(ctx, todoId, cb);
 });
 
 define('editTodoText', function(ctx, todoId, text, cb) {
@@ -284,10 +284,7 @@ define('addTag', function(ctx, todoId, tag, cb) {
 });
 
 define('removeTag', function(ctx, todoId, tag, cb) {
-  // NOTE: Table.delete is awkward (it takes a range), so instead we use
-  // Row.delete. It would be nice for Table.delete to operate on a single row
-  // and have a separate Table.deleteRowRange.
-  this.tb_.row(tagKey(todoId, tag)).delete(ctx, cb);
+  this.tb_.delete(ctx, tagKey(todoId, tag), cb);
 });
 
 ////////////////////////////////////////
