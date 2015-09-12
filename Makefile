@@ -1,5 +1,7 @@
 SHELL := /bin/bash -euo pipefail
-export PATH := node_modules/.bin:$(V23_ROOT)/release/go/bin:$(V23_ROOT)/third_party/cout/node/bin:$(PATH)
+# Add $V23_ROOT/devtools/bin to PATH in case the user hasn't done so in their
+# ~/.bashrc.
+export PATH := node_modules/.bin:$(V23_ROOT)/devtools/bin:$(V23_ROOT)/release/go/bin:$(V23_ROOT)/third_party/cout/node/bin:$(PATH)
 
 # Default browserify options: use sourcemaps.
 BROWSERIFY_OPTS := --debug
