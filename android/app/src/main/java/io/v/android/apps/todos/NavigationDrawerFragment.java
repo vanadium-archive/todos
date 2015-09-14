@@ -4,6 +4,8 @@
 
 package io.v.android.apps.todos;
 
+import android.content.DialogInterface;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.app.Activity;
 import android.support.v7.app.ActionBar;
@@ -23,8 +25,13 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Fragment used for managing interactions for and presentation of a navigation drawer.
@@ -57,10 +64,13 @@ public class NavigationDrawerFragment extends Fragment {
     private DrawerLayout mDrawerLayout;
     private ListView mDrawerListView;
     private View mFragmentContainerView;
+    private TextView mNewListView;
 
     private int mCurrentSelectedPosition = 0;
     private boolean mFromSavedInstanceState;
     private boolean mUserLearnedDrawer;
+
+    private List<String> mListNames = new ArrayList<String>();
 
     public NavigationDrawerFragment() {
     }
@@ -91,27 +101,61 @@ public class NavigationDrawerFragment extends Fragment {
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+    public View onCreateView(final LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        mDrawerListView = (ListView) inflater.inflate(
-                R.layout.fragment_navigation_drawer, container, false);
+        View v = inflater.inflate(R.layout.fragment_navigation_drawer, container, false);
+        mDrawerListView = (ListView) v.findViewById(R.id.navigation_drawer_list);
         mDrawerListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 selectItem(position);
             }
         });
+        refreshList();
+        mDrawerListView.setItemChecked(mCurrentSelectedPosition, true);
+
+        mNewListView = (TextView) v.findViewById(R.id.new_list);
+        mNewListView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                addList(inflater);
+            }
+        });
+        return v;
+    }
+
+    /**
+     * Prompt the user for a new list name and add it to the navigation drawer.
+     */
+    private void addList(LayoutInflater inflater) {
+        View promptView = inflater.inflate(R.layout.new_list_prompt, null);
+        AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(getContext());
+        dialogBuilder.setView(promptView);
+        final EditText input = (EditText) promptView.findViewById(R.id.new_list_input);
+        dialogBuilder.setCancelable(true);
+        dialogBuilder
+                .setPositiveButton(R.string.create, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        mListNames.add(input.getText().toString());
+                        refreshList();
+                    }
+                })
+                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.cancel();
+                    }
+                });
+        dialogBuilder.create().show();
+    }
+
+    private void refreshList() {
         mDrawerListView.setAdapter(new ArrayAdapter<String>(
                 getActionBar().getThemedContext(),
                 android.R.layout.simple_list_item_activated_1,
                 android.R.id.text1,
-                new String[]{
-                        getString(R.string.title_section1),
-                        getString(R.string.title_section2),
-                        getString(R.string.title_section3),
-                }));
-        mDrawerListView.setItemChecked(mCurrentSelectedPosition, true);
-        return mDrawerListView;
+                mListNames.toArray(new String[0])));
     }
 
     public boolean isDrawerOpen() {
