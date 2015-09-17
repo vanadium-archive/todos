@@ -1,7 +1,7 @@
 SHELL := /bin/bash -euo pipefail
-# Add $V23_ROOT/devtools/bin to PATH in case the user hasn't done so in their
+# Add $JIRI_ROOT/devtools/bin to PATH in case the user hasn't done so in their
 # ~/.bashrc.
-export PATH := node_modules/.bin:$(V23_ROOT)/devtools/bin:$(V23_ROOT)/release/go/bin:$(V23_ROOT)/third_party/cout/node/bin:$(PATH)
+export PATH := node_modules/.bin:$(JIRI_ROOT)/devtools/bin:$(JIRI_ROOT)/release/go/bin:$(JIRI_ROOT)/third_party/cout/node/bin:$(PATH)
 
 # Default browserify options: use sourcemaps.
 BROWSERIFY_OPTS := --debug
@@ -18,7 +18,7 @@ COMPRESS_OPTS := --compress [ --no-unused --no-evaluate ]
 # https://github.com/substack/node-browserify/issues/431
 INCREASE_FILE_DESC := ulimit -S -n 2560
 
-# If NOFIND is set, assume that files under V23_ROOT are static. This reduces
+# If NOFIND is set, assume that files under JIRI_ROOT are static. This reduces
 # build time dramatically.
 ifdef NOFIND
 	FIND := true
@@ -43,7 +43,7 @@ endef
 .DELETE_ON_ERROR:
 
 # Builds mounttabled, principal, and syncbased.
-bin: $(shell $(FIND) $(V23_ROOT) -name "*.go") | env-check
+bin: $(shell $(FIND) $(JIRI_ROOT) -name "*.go") | env-check
 	v23 go build -a -o $@/mounttabled v.io/x/ref/services/mounttable/mounttabled
 	v23 go build -a -o $@/principal v.io/x/ref/cmd/principal
 	v23 go build -a -o $@/syncbased v.io/x/ref/services/syncbase/syncbased
@@ -54,16 +54,16 @@ creds: bin
 	./bin/principal seekblessings --v23.credentials creds
 	touch $@
 
-node_modules: package.json $(shell $(FIND) $(V23_ROOT)/release/javascript/syncbase/{package.json,src} $(V23_ROOT)/release/javascript/core/{package.json,src}) | env-check
+node_modules: package.json $(shell $(FIND) $(JIRI_ROOT)/release/javascript/syncbase/{package.json,src} $(JIRI_ROOT)/release/javascript/core/{package.json,src}) | env-check
 	npm prune
 	npm install
-# Link the vanadium and syncbase modules from V23_ROOT.
+# Link the vanadium and syncbase modules from JIRI_ROOT.
 	rm -rf ./node_modules/{vanadium,syncbase}
-	cd "$(V23_ROOT)/release/javascript/core" && npm link
+	cd "$(JIRI_ROOT)/release/javascript/core" && npm link
 	npm link vanadium
 # Note, we run "make node_modules" in the JS syncbase repo to ensure that the
 # vanadium module is linked there.
-	cd "$(V23_ROOT)/release/javascript/syncbase" && make node_modules && npm link
+	cd "$(JIRI_ROOT)/release/javascript/syncbase" && make node_modules && npm link
 	npm link syncbase
 # Note, browserify 10.2.5 and up will share the vanadium module instance between
 # todosapp and syncbase, since their node_modules symlinks point to a common
@@ -93,8 +93,8 @@ serve: build
 
 .PHONY: env-check
 env-check:
-ifndef V23_ROOT
-	$(error V23_ROOT is not set.  Please install Vanadium per the contributor instructions)
+ifndef JIRI_ROOT
+	$(error JIRI_ROOT is not set.  Please install Vanadium per the contributor instructions)
 endif
 
 .PHONY: clean

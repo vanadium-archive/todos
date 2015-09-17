@@ -12,7 +12,7 @@ and Node.js profiles using `v23 profile install syncbase nodejs`. We also assume
 that you've installed the [Vanadium Chrome extension][crx].
 
 The commands below assume that the current working directory is
-`$V23_ROOT/release/projects/todos`.
+`$JIRI_ROOT/release/projects/todos`.
 
 First, build all necessary binaries.
 
@@ -108,28 +108,28 @@ triggering the same redraw procedure as described above.
 
 Signature
 
-    $V23_ROOT/release/go/bin/vrpc -v23.credentials=creds signature /localhost:4002
+    $JIRI_ROOT/release/go/bin/vrpc -v23.credentials=creds signature /localhost:4002
 
 Method call
 
-    $V23_ROOT/release/go/bin/vrpc -v23.credentials=creds call /localhost:4002 GetPermissions
-    $V23_ROOT/release/go/bin/vrpc -v23.credentials=creds call /localhost:4002/todos/db/tb Scan '""' '""'
+    $JIRI_ROOT/release/go/bin/vrpc -v23.credentials=creds call /localhost:4002 GetPermissions
+    $JIRI_ROOT/release/go/bin/vrpc -v23.credentials=creds call /localhost:4002/todos/db/tb Scan '""' '""'
 
 Glob
 
-    $V23_ROOT/release/go/bin/namespace -v23.credentials=creds glob "/localhost:4002/..."
+    $JIRI_ROOT/release/go/bin/namespace -v23.credentials=creds glob "/localhost:4002/..."
 
 Debug
 
-    $V23_ROOT/release/go/bin/debug -v23.credentials=creds glob "/localhost:4002/__debug/stats/rpc/server/routing-id/..."
-    $V23_ROOT/release/go/bin/debug -v23.credentials=creds stats read "/localhost:4002/__debug/stats/rpc/server/routing-id/c61964ab4c72ee522067eb6d5ddd22fc/methods/BeginBatch/latency-ms"
+    $JIRI_ROOT/release/go/bin/debug -v23.credentials=creds glob "/localhost:4002/__debug/stats/rpc/server/routing-id/..."
+    $JIRI_ROOT/release/go/bin/debug -v23.credentials=creds stats read "/localhost:4002/__debug/stats/rpc/server/routing-id/c61964ab4c72ee522067eb6d5ddd22fc/methods/BeginBatch/latency-ms"
 
 ### Integration test setup
 
 For debugging performance issues, it can be helpful to use the JS integration
 test configuration. To do so, first run the integration test as follows.
 
-    cd $V23_ROOT/release/javascript/syncbase
+    cd $JIRI_ROOT/release/javascript/syncbase
     NOQUIT=1 NOHEADLESS=1 make test-integration-browser
 
 This command starts a local mount table, identityd, and Syncbase mounted at
@@ -140,7 +140,7 @@ Scroll up in the test output to get the test environment configuration, in
 particular the mount table endpoint, `V23_NAMESPACE`. Glob the locally mounted
 syncbase as follows.
 
-    $V23_ROOT/release/go/bin/namespace -v23.credentials=/usr/local/google/home/sadovsky/vanadium/release/javascript/syncbase/tmp/test-credentials glob "/@5@ws@127.0.0.1:41249@7d24de5a57f6532b184562654ad2c554@m@test/child@@/test/syncbased/..."
+    $JIRI_ROOT/release/go/bin/namespace -v23.credentials=/usr/local/google/home/sadovsky/vanadium/release/javascript/syncbase/tmp/test-credentials glob "/@5@ws@127.0.0.1:41249@7d24de5a57f6532b184562654ad2c554@m@test/child@@/test/syncbased/..."
 
 Visit `http://localhost:4000/?d=syncbase&sb=test/syncbased` in the launched
 Chrome instance to talk to your test syncbase.
