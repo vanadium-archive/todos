@@ -294,18 +294,18 @@ define('removeTag', function(ctx, todoId, tag, cb) {
 // constructed, and it's also weird that db.SyncGroup(name) expects an absolute
 // name. We should probably allow clients to specify DB-relative SG names.
 
-// Currently, SG names must be of the form <syncbaseName>/@@sync/<suffix>.
+// Currently, SG names must be of the form <syncbaseName>/%%sync/<suffix>.
 // We use <app>/<db>/<table>/<listId> for the suffix part.
 
 SyncbaseDispatcher.prototype.sgNameToListId = function(sgName) {
-  return sgName.replace(new RegExp('.*/@@sync/todos/db/'), '');
+  return sgName.replace(new RegExp('.*/%%sync/todos/db/'), '');
 };
 
 SyncbaseDispatcher.prototype.listIdToSgName = function(listId) {
   // TODO(sadovsky): fullName doesn't include the mount table name, i.e. the
   // part corresponding to namespaceRoots. Our workaround is to specify a
   // fully-qualified Syncbase name.
-  var prefix = this.tb_.fullName.replace('/todos/db/tb', '/@@sync/todos/db');
+  var prefix = this.tb_.fullName.replace('/todos/db/tb', '/%%sync/todos/db');
   return prefix + '/' + listId;
 };
 
