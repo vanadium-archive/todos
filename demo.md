@@ -8,7 +8,7 @@ and Node.js profiles using `v23 profile install syncbase nodejs`. We also assume
 that you've installed the [Vanadium Chrome extension][crx].
 
 The commands below assume that the current working directory is
-`$V23_ROOT/release/projects/todos`.
+`$JIRI_ROOT/release/projects/todos`.
 
 For detailed explanations of the app setup steps, see [README.md](README.md).
 
