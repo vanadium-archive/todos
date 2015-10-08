@@ -427,27 +427,26 @@ var StatusPane = React.createFactory(React.createClass({
       }, okCancelEvents({
         ok: function(value, e) {
           e.target.value = '';
-          if (shared) {
-            // TODO(sadovsky): Let the user add members to an existing SG once
-            // Syncbase supports it.
-            alert('Cannot add members to an existing SyncGroup.');
-            return;
-          }
           // TODO(sadovsky): Better input validation.
           if (!value.includes('@') || !value.includes('.')) {
             alert('Invalid email address.');
             return;
           }
-          disp.createSyncGroup(disp.listIdToSgName(list._id), [
-            emailToBlessing(userEmail),
-            emailToBlessing(value)
-          ], mtName, alertOnError);
+          var sgName = disp.listIdToSgName(list._id);
+          if (shared) {
+            disp.addToSyncGroupPerms(sgName, emailToBlessing(value),
+                                     alertOnError);
+          } else {
+            disp.createSyncGroup(sgName, [
+              emailToBlessing(userEmail),
+              emailToBlessing(value)
+            ], mtName, alertOnError);
+          }
         },
         cancel: function(e) {
           e.target.value = '';
         }
       }, true))),
-      // TODO(sadovsky): Exclude self?
       !shared ? null : h('div.shared-with', {key: 'shared-with'}, [
         h('div.subtitle', {key: 'subtitle'}, 'Currently shared with'),
         h('div.emails', {
@@ -699,10 +698,7 @@ var Page = React.createFactory(React.createClass({
     });
 
     disp.on('watchError', function(err) {
-      alertOnError(new Error(
-        'Error occurred in Syncbase watch mechanism. Data may be stale. ' +
-        'Please refresh the page.\n' + err)
-      );
+      alertOnError(new Error('Error in Syncbase watch stream. Data may be stale. Please refresh this page.\n' + err));  // jshint ignore:line
     });
 
     // Load initial lists and todos. Note that changes can come in concurrently

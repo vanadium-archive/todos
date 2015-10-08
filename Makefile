@@ -44,9 +44,9 @@ endef
 
 # Builds mounttabled, principal, and syncbased.
 bin: $(shell $(FIND) $(JIRI_ROOT) -name "*.go") | env-check
-	v23 go build -a -o $@/mounttabled v.io/x/ref/services/mounttable/mounttabled
-	v23 go build -a -o $@/principal v.io/x/ref/cmd/principal
-	v23 go build -a -o $@/syncbased v.io/x/ref/services/syncbase/syncbased
+	jiri go build -a -o $@/mounttabled v.io/x/ref/services/mounttable/mounttabled
+	jiri go build -a -o $@/principal v.io/x/ref/cmd/principal
+	jiri go build -a -o $@/syncbased v.io/x/ref/services/syncbase/syncbased
 	touch $@
 
 # Mints credentials.
@@ -100,8 +100,8 @@ endif
 .PHONY: clean
 clean:
 	rm -rf bin node_modules public/bundle.*
-	v23 goext distclean
+	jiri goext distclean
 
 .PHONY: lint
-lint:
+lint: node_modules
 	jshint .

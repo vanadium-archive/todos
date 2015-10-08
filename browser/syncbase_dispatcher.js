@@ -45,27 +45,30 @@ function SyncbaseDispatcher(rt, db) {
   this.db_ = db;
   this.tb_ = db.table('tb');
 
-  // Initialize Syncbase watch
-  var errorCb = function(err) {
+  // Initialize Syncbase watch.
+  var errCb = function(err) {
     if (err) {
-      this.emit('watchError', err);
+      that.emit('watchError', err);
     }
-  }
+  };
   this.db_.getResumeMarker(that.ctx_, function(err, marker) {
-    if (err) { cb(err); }
-    var watchStream = that.db_.watch(that.ctx_, that.tb_.name, '', marker, errorCb);
+    if (err) {
+      errCb(err);
+      return;
+    }
+    var stream = that.db_.watch(that.ctx_, that.tb_.name, '', marker, errCb);
 
     // TODO(aghassemi): Ideally the app would update its in-memory data
-    // structures directly from the watch stream, but since SyncGroup changes
-    // do not yet show up on the watch stream, it can't.
-    watchStream.on('data', function(change) {
-      // TODO(aghassemi): fromSync should be change.fromSync but due to
-      // issue v.io/i/685 we set it to true for now.
+    // structures directly from the watch stream, but since SyncGroup changes do
+    // not yet show up in the watch stream, it can't. See v.io/i/764.
+    stream.on('data', function(change) {
+      // TODO(aghassemi): fromSync ought to be change.fromSync, but due to issue
+      // v.io/i/685 we must set it to true for now.
       var fromSync = true;
       that.emit('change', fromSync);
     });
 
-    watchStream.on('error', errorCb);
+    stream.on('error', errCb);
   });
 }
 
@@ -74,13 +77,22 @@ function SyncbaseDispatcher(rt, db) {
 
 function noop() {}
 
-var SEP = '.';  // separator for key parts
+var SEP = '/';  // separator for key parts
 
 function join() {
-  // TODO(sadovsky): Switch to using naming.join() once Syncbase allows slashes
-  // in row keys. Also, restrict which chars are allowed in tag names.
   var args = Array.prototype.slice.call(arguments);
   return args.join(SEP);
+}
+
+// Similar to Go's strings.SplitN.
+function splitN(str, n) {
+  console.assert(n >= 0);
+  var parts = str.split(SEP);
+  var res = parts.slice(0, n-1);
+  if (parts.length >= n) {
+    res.push(parts.slice(n-1).join(SEP));
+  }
+  return res;
 }
 
 function newListKey() {
@@ -93,15 +105,6 @@ function newTodoKey(listId) {
 
 function tagKey(todoId, tag) {
   return join(todoId, 'tags', tag);
-}
-
-function keyToListId(key) {
-  var parts = key.split(SEP);
-  // Assume key is for list, todo, or tag.
-  if (parts.length === 1 || parts.length === 3 || parts.length === 5) {
-    return parts[0];
-  }
-  throw new Error('bad key: ' + key);
 }
 
 // TODO(sadovsky): Maybe switch from JSON to VOM/VDL.
@@ -201,7 +204,7 @@ define('getTodos', function(ctx, listId, cb) {
     var todos = [];
     var todo = {};
     _.forEach(rows, function(row) {
-      var parts = row.key.split(SEP);
+      var parts = splitN(row.key, 5);
       console.assert(parts.length >= 3 && parts[0] === listId);
       if (parts.length === 3) {  // todo entry
         todo = _.assign(unmarshal(row.value), {_id: row.key, tags: []});
@@ -210,7 +213,7 @@ define('getTodos', function(ctx, listId, cb) {
         var tagName = parts[4];
         if (tagKey(todo._id, tagName) !== row.key) {
           // Orphaned tag (from a deleted todo entry); skip.
-          // TODO(ivanpi): Garbage collect orphaned tags.
+          // TODO(ivanpi): Garbage-collect orphaned tags.
           return;
         }
         todo.tags.push(tagName);
@@ -347,17 +350,21 @@ var MEMBER_INFO = new nosql.SyncGroupMemberInfo({
   syncPriority: 8
 });
 
+function mkSgPerms(blessings) {
+  // TODO(sadovsky): Maybe make perms more restrictive.
+  return new Map([
+    ['Admin',   {'in': blessings}],
+    ['Read',    {'in': blessings}],
+    ['Write',   {'in': blessings}],
+    ['Resolve', {'in': blessings}],
+    ['Debug',   {'in': blessings}]
+  ]);
+}
+
 define('createSyncGroup', function(ctx, sgName, blessings, mtName, cb) {
   var sg = this.db_.syncGroup(sgName);
   var spec = new nosql.SyncGroupSpec({
-    // TODO(sadovsky): Maybe make perms more restrictive.
-    perms: new Map([
-      ['Admin',   {'in': blessings}],
-      ['Read',    {'in': blessings}],
-      ['Write',   {'in': blessings}],
-      ['Resolve', {'in': blessings}],
-      ['Debug',   {'in': blessings}]
-    ]),
+    perms: mkSgPerms(blessings),
     prefixes: [new nosql.SyncGroupPrefix({
       tableName: 'tb',
       rowPrefix: this.sgNameToListId(sgName)
@@ -365,6 +372,23 @@ define('createSyncGroup', function(ctx, sgName, blessings, mtName, cb) {
     mountTables: [vanadium.naming.join(mtName, 'rendezvous')]
   });
   sg.create(ctx, spec, MEMBER_INFO, this.maybeEmit_(cb));
+});
+
+// TODO(sadovsky): The update to the syncgroup won't show up immediately in the
+// UIs of remote peers, since the watch stream does not include changes to
+// syncgroups. See v.io/i/764.
+define('addToSyncGroupPerms', function(ctx, sgName, blessing, cb) {
+  var that = this;
+  var sg = this.db_.syncGroup(sgName);
+  sg.getSpec(ctx, function(err, spec, version) {
+    var blessings = spec.perms.get('Admin')['in'];
+    if (_.includes(blessings, blessing)) {
+      return cb();  // addToSyncGroupPerms is idempotent
+    }
+    blessings.push(blessing);
+    spec.perms = mkSgPerms(blessings);
+    sg.setSpec(ctx, spec, version, that.maybeEmit_(cb));
+  });
 });
 
 define('joinSyncGroup', function(ctx, sgName, cb) {
@@ -396,8 +420,8 @@ SyncbaseDispatcher.prototype.logTraceRecords = function() {
 ////////////////////////////////////////
 // Internal helpers
 
-// TODO(aghassemi): Remove this once changes to SyncGroups are included
-// in the watch stream.
+// TODO(aghassemi): Remove this once changes to SyncGroups are included in the
+// watch stream.
 SyncbaseDispatcher.prototype.maybeEmit_ = function(cb) {
   var that = this;
   cb = cb || noop;
@@ -410,10 +434,6 @@ SyncbaseDispatcher.prototype.maybeEmit_ = function(cb) {
 
 // Writes the given tag into the given table.
 define('addTagImpl_', function(ctx, tb, todoId, tag, cb) {
-  // TODO(sadovsky): Syncbase currently disallows most characters in keys, so
-  // as a quick hack we drop all unsavory characters before storing tags.
-  tag = tag.replace(/[^a-zA-Z0-9_.-]/g, '');  // taken from Syncbase key check
-  tag = tag.split(SEP).join('');  // also eliminate separator
   if (tag === '') {
     return process.nextTick(cb);
   }
@@ -453,8 +473,8 @@ define('getRowsQuery_', function(ctx, where, cb) {
 
 // Performs a read-modify-write on key, applying updateFn to the value.
 // Takes care of value marshalling and unmarshalling.
-// TODO(sadovsky): Atomic read-modify-write requires 4 RPCs. MongoDB-style API
-// would bring it down to 1.
+// TODO(sadovsky): Atomic read-modify-write requires 4 RPCs. Query-based update
+// mechanism would bring it down to 1.
 define('update_', function(ctx, key, updateFn, cb) {
   var opts = new nosql.BatchOptions();
   nosql.runInBatch(ctx, this.db_, opts, function(db, cb) {
@@ -462,7 +482,7 @@ define('update_', function(ctx, key, updateFn, cb) {
     tb.get(wn(ctx, 'get:' + key), key, function(err, value) {
       if (err) {
         if (err instanceof verror.NoExistError) {
-          // Concurrent delete, likely from a remote peer. Pretend this update
+          // Concurrent delete, likely from a remote peer. Pretend our update
           // never happened.
           // TODO(sadovsky): Maybe make it so client transactions take priority
           // over sync transactions, so that app developers don't have to worry
