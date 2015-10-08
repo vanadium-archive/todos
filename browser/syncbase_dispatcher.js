@@ -186,7 +186,7 @@ define('getLists', function(ctx, cb) {
       var listId = list._id;
       _.forEach(sgs, function(sg) {
         console.assert(sg.spec.prefixes.length === 1);
-        if (listId === sg.spec.prefixes[0].slice(3)) {  // drop 'tb:' prefix
+        if (listId === sg.spec.prefixes[0].rowPrefix) {
           list.sg = sg;
         }
       });
@@ -358,8 +358,10 @@ define('createSyncGroup', function(ctx, sgName, blessings, mtName, cb) {
       ['Resolve', {'in': blessings}],
       ['Debug',   {'in': blessings}]
     ]),
-    // TODO(sadovsky): Update this once we switch to {table, prefix} tuples.
-    prefixes: ['tb:' + this.sgNameToListId(sgName)],
+    prefixes: [new nosql.SyncGroupPrefix({
+      tableName: 'tb',
+      rowPrefix: this.sgNameToListId(sgName)
+    })],
     mountTables: [vanadium.naming.join(mtName, 'rendezvous')]
   });
   sg.create(ctx, spec, MEMBER_INFO, this.maybeEmit_(cb));
