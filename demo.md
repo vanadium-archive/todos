@@ -2,10 +2,10 @@
 
 This page describes how to set things up for a demo.
 
-We assume you've followed the [contributor instructions][contrib] to install
+We assume you've followed the [installation instructions][install] to install
 prerequisites and fetch the Vanadium repositories, and installed the Syncbase
-and Node.js profiles using `v23 profile install syncbase nodejs`. We also assume
-that you've installed the [Vanadium Chrome extension][crx].
+and Node.js profiles using `jiri profile install syncbase nodejs`. We also
+assume that you've installed the [Vanadium Chrome extension][crx].
 
 The commands below assume that the current working directory is
 `$JIRI_ROOT/release/projects/todos`.
@@ -79,5 +79,5 @@ app will use `/localhost:5001` as the mount table name, and remote peers will
 not be able to contact the syncgroup. If we switch to a "predefined, global
 mount table" model, this will no longer be an issue.
 
-[contrib]: https://github.com/vanadium/docs/blob/master/community/contributing.md
+[install]: https://github.com/vanadium/docs/blob/master/installation.md
 [crx]: https://github.com/vanadium/docs/blob/master/tools/vanadium-chrome-extension.md

@@ -6,10 +6,10 @@ requirements for this app are [described here][requirements].
 
 ## Running the web application
 
-We assume you've followed the [contributor instructions][contrib] to install
+We assume you've followed the [installation instructions][install] to install
 prerequisites and fetch the Vanadium repositories, and installed the Syncbase
-and Node.js profiles using `v23 profile install syncbase nodejs`. We also assume
-that you've installed the [Vanadium Chrome extension][crx].
+and Node.js profiles using `jiri profile install syncbase nodejs`. We also
+assume that you've installed the [Vanadium Chrome extension][crx].
 
 The commands below assume that the current working directory is
 `$JIRI_ROOT/release/projects/todos`.
@@ -99,11 +99,6 @@ triggering the same redraw procedure as described above.
 
 ## Debugging notes
 
-### Links
-
-- https://sites.google.com/a/google.com/v-prod/
-- https://sites.google.com/a/google.com/v-prod/vanadium-services/how-to
-
 ### Commands
 
 Signature
@@ -148,17 +143,13 @@ Chrome instance to talk to your test syncbase.
 ### Performance benchmarking
 
 To run a simple benchmark (parallel 100 puts, followed by a scan of those rows),
-specify query param `bm=1`.
-
-All numbers assume dev console is closed, and assume non-test setup as described
-above.
-
-Currently, parallel 100 puts takes 700ms, and scanning 100 rows takes 300ms.
+specify query param `bm=1`. For meaningful performance measurements, be sure to
+close the Chrome JavaScript console.
 
 [syncbase]: https://docs.google.com/document/d/12wS_IEPf8HTE7598fcmlN-Y692OWMSneoe2tvyBEpi0/edit#
 [meteor-todos]: https://github.com/meteor/simple-todos
 [requirements]: https://docs.google.com/document/d/13pbomPQu73Nug8RletnbkqXooPtKMCwPKW9cVYQi_jY/edit
-[contrib]: https://github.com/vanadium/docs/blob/master/community/contributing.md
+[install]: https://github.com/vanadium/docs/blob/master/installation.md
 [crx]: https://github.com/vanadium/docs/blob/master/tools/vanadium-chrome-extension.md
 [design]: https://docs.google.com/document/d/1GtBk75QmjSorUW6T6BATCoiS_LTqOrGksgqjqJ1Hiow/edit
 [demo-sync-setup]: https://docs.google.com/document/d/1174a7LIL8jnV1fN174PPV4fO74LGNLi6ODAFEp5l5Rw/edit
