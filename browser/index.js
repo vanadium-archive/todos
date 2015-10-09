@@ -434,10 +434,10 @@ var StatusPane = React.createFactory(React.createClass({
           }
           var sgName = disp.listIdToSgName(list._id);
           if (shared) {
-            disp.addToSyncGroupPerms(sgName, emailToBlessing(value),
+            disp.addToSyncgroupPerms(sgName, emailToBlessing(value),
                                      alertOnError);
           } else {
-            disp.createSyncGroup(sgName, [
+            disp.createSyncgroup(sgName, [
               emailToBlessing(userEmail),
               emailToBlessing(value)
             ], mtName, alertOnError);
@@ -511,7 +511,7 @@ var ListsPane = React.createFactory(React.createClass({
           placeholder: 'Join list'
         }, okCancelEvents({
           ok: function(value, e) {
-            that.props.joinSyncGroup(value.trim(), alertOnError);
+            that.props.joinSyncgroup(value.trim(), alertOnError);
             e.target.value = '';
           }
         })))));
@@ -618,11 +618,11 @@ var Page = React.createFactory(React.createClass({
     });
   },
   // Joins the specified syncgroup and displays the associated list.
-  joinSyncGroup_: function(sgName, cb) {
+  joinSyncgroup_: function(sgName, cb) {
     var that = this;
     console.assert(this.props.dispType === DISP_TYPE_SYNCBASE);
-    disp.joinSyncGroup(sgName, function(err) {
-      // Note, joinSyncGroup is a noop (no error) if the caller is already a
+    disp.joinSyncgroup(sgName, function(err) {
+      // Note, joinSyncgroup is a noop (no error) if the caller is already a
       // member, which is the desired behavior here.
       if (err) return cb(err);
       var listId = disp.sgNameToListId(sgName);
@@ -648,7 +648,7 @@ var Page = React.createFactory(React.createClass({
       alertOnError(err);
       that.setState({dispInitialized: true}, function() {
         if (props.joinSgName) {
-          that.joinSyncGroup_(props.joinSgName, alertOnError);
+          that.joinSyncgroup_(props.joinSgName, alertOnError);
         }
       });
     });
@@ -756,8 +756,8 @@ var Page = React.createFactory(React.createClass({
           that.setListId_(listId);
           that.setState({showStatusDialog: true});
         },
-        joinSyncGroup: function(sgName, cb) {
-          that.joinSyncGroup_(sgName, cb);
+        joinSyncgroup: function(sgName, cb) {
+          that.joinSyncgroup_(sgName, cb);
         }
       }),
       h('div#tags-and-todos-pane', {key: 'tags-and-todos-pane'}, [

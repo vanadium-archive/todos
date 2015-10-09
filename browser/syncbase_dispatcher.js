@@ -59,7 +59,7 @@ function SyncbaseDispatcher(rt, db) {
     var stream = that.db_.watch(that.ctx_, that.tb_.name, '', marker, errCb);
 
     // TODO(aghassemi): Ideally the app would update its in-memory data
-    // structures directly from the watch stream, but since SyncGroup changes do
+    // structures directly from the watch stream, but since syncgroup changes do
     // not yet show up in the watch stream, it can't. See v.io/i/764.
     stream.on('data', function(change) {
       // TODO(aghassemi): fromSync ought to be change.fromSync, but due to issue
@@ -159,14 +159,14 @@ define('getListsOnly_', function(ctx, cb) {
   });
 });
 
-// Returns a list of objects describing SyncGroups.
+// Returns a list of objects describing syncgroups.
 // TODO(sadovsky): Would be nice if this could be done with a single RPC.
-define('getSyncGroups_', function(ctx, cb) {
+define('getSyncgroups_', function(ctx, cb) {
   var that = this;
-  this.db_.getSyncGroupNames(ctx, function(err, sgNames) {
+  this.db_.getSyncgroupNames(ctx, function(err, sgNames) {
     if (err) return cb(err);
     async.map(sgNames, function(sgName, cb) {
-      that.getSyncGroup_(ctx, sgName, cb);
+      that.getSyncgroup_(ctx, sgName, cb);
     }, cb);
   });
 });
@@ -179,7 +179,7 @@ define('getLists', function(ctx, cb) {
       that.getListsOnly_(ctx, cb);
     },
     function(cb) {
-      that.getSyncGroups_(ctx, cb);
+      that.getSyncgroups_(ctx, cb);
     }
   ], function(err, results) {
     if (err) return cb(err);
@@ -291,10 +291,10 @@ define('removeTag', function(ctx, todoId, tag, cb) {
 });
 
 ////////////////////////////////////////
-// SyncGroup methods
+// Syncgroup methods
 
 // TODO(sadovsky): It's not clear from the Syncbase API how SG names should be
-// constructed, and it's also weird that db.SyncGroup(name) expects an absolute
+// constructed, and it's also weird that db.Syncgroup(name) expects an absolute
 // name. We should probably allow clients to specify DB-relative SG names.
 
 // Currently, SG names must be of the form <syncbaseName>/%%sync/<suffix>.
@@ -312,10 +312,10 @@ SyncbaseDispatcher.prototype.listIdToSgName = function(listId) {
   return prefix + '/' + listId;
 };
 
-// Returns an object describing the SyncGroup with the given name.
+// Returns an object describing the syncgroup with the given name.
 // Currently, this object will have two fields: 'name' and 'spec'.
-define('getSyncGroup_', function(ctx, sgName, cb) {
-  var sg = this.db_.syncGroup(sgName);
+define('getSyncgroup_', function(ctx, sgName, cb) {
+  var sg = this.db_.syncgroup(sgName);
   async.parallel([
     function(cb) {
       sg.getSpec(ctx, function(err, spec, version) {
@@ -327,7 +327,7 @@ define('getSyncGroup_', function(ctx, sgName, cb) {
       // TODO(sadovsky): For now, in the UI we just want to show who's on the
       // ACL for a given list, so we don't bother with getMembers. On top of
       // that, currently getMembers returns a map of random Syncbase instance
-      // ids to SyncGroupMemberInfo structs, neither of which tell us anything
+      // ids to SyncgroupMemberInfo structs, neither of which tell us anything
       // useful.
       if (true) {
         process.nextTick(cb);
@@ -346,7 +346,7 @@ define('getSyncGroup_', function(ctx, sgName, cb) {
 
 // TODO(sadovsky): Copied from test-syncgroup.js. I have no idea whether this
 // value is appropriate.
-var MEMBER_INFO = new nosql.SyncGroupMemberInfo({
+var MEMBER_INFO = new nosql.SyncgroupMemberInfo({
   syncPriority: 8
 });
 
@@ -361,11 +361,11 @@ function mkSgPerms(blessings) {
   ]);
 }
 
-define('createSyncGroup', function(ctx, sgName, blessings, mtName, cb) {
-  var sg = this.db_.syncGroup(sgName);
-  var spec = new nosql.SyncGroupSpec({
+define('createSyncgroup', function(ctx, sgName, blessings, mtName, cb) {
+  var sg = this.db_.syncgroup(sgName);
+  var spec = new nosql.SyncgroupSpec({
     perms: mkSgPerms(blessings),
-    prefixes: [new nosql.SyncGroupPrefix({
+    prefixes: [new nosql.SyncgroupPrefix({
       tableName: 'tb',
       rowPrefix: this.sgNameToListId(sgName)
     })],
@@ -377,13 +377,13 @@ define('createSyncGroup', function(ctx, sgName, blessings, mtName, cb) {
 // TODO(sadovsky): The update to the syncgroup won't show up immediately in the
 // UIs of remote peers, since the watch stream does not include changes to
 // syncgroups. See v.io/i/764.
-define('addToSyncGroupPerms', function(ctx, sgName, blessing, cb) {
+define('addToSyncgroupPerms', function(ctx, sgName, blessing, cb) {
   var that = this;
-  var sg = this.db_.syncGroup(sgName);
+  var sg = this.db_.syncgroup(sgName);
   sg.getSpec(ctx, function(err, spec, version) {
     var blessings = spec.perms.get('Admin')['in'];
     if (_.includes(blessings, blessing)) {
-      return cb();  // addToSyncGroupPerms is idempotent
+      return cb();  // addToSyncgroupPerms is idempotent
     }
     blessings.push(blessing);
     spec.perms = mkSgPerms(blessings);
@@ -391,8 +391,8 @@ define('addToSyncGroupPerms', function(ctx, sgName, blessing, cb) {
   });
 });
 
-define('joinSyncGroup', function(ctx, sgName, cb) {
-  var sg = this.db_.syncGroup(sgName);
+define('joinSyncgroup', function(ctx, sgName, cb) {
+  var sg = this.db_.syncgroup(sgName);
   sg.join(ctx, MEMBER_INFO, this.maybeEmit_(cb));
 });
 
@@ -420,7 +420,7 @@ SyncbaseDispatcher.prototype.logTraceRecords = function() {
 ////////////////////////////////////////
 // Internal helpers
 
-// TODO(aghassemi): Remove this once changes to SyncGroups are included in the
+// TODO(aghassemi): Remove this once changes to syncgroups are included in the
 // watch stream.
 SyncbaseDispatcher.prototype.maybeEmit_ = function(cb) {
   var that = this;
