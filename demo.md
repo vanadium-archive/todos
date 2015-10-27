@@ -3,9 +3,9 @@
 This page describes how to set things up for a demo.
 
 We assume you've followed the [installation instructions][install] to install
-prerequisites and fetch the Vanadium repositories, and installed the Syncbase
-and Node.js profiles using `jiri profile install syncbase nodejs`. We also
-assume that you've installed the [Vanadium Chrome extension][crx].
+prerequisites and fetch the Vanadium repositories, and installed the base and
+Node.js profiles using `jiri v23-profile install base nodejs`. We also assume
+that you've installed the [Vanadium Chrome extension][crx].
 
 The commands below assume that the current working directory is
 `$JIRI_ROOT/release/projects/todos`.
