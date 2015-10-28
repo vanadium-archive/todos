@@ -189,7 +189,7 @@ define('getLists', function(ctx, cb) {
       var listId = list._id;
       _.forEach(sgs, function(sg) {
         console.assert(sg.spec.prefixes.length === 1);
-        if (listId === sg.spec.prefixes[0].rowPrefix) {
+        if (listId === sg.spec.prefixes[0].row) {
           list.sg = sg;
         }
       });
@@ -365,9 +365,9 @@ define('createSyncgroup', function(ctx, sgName, blessings, mtName, cb) {
   var sg = this.db_.syncgroup(sgName);
   var spec = new nosql.SyncgroupSpec({
     perms: mkSgPerms(blessings),
-    prefixes: [new nosql.SyncgroupPrefix({
+    prefixes: [new nosql.TableRow({
       tableName: 'tb',
-      rowPrefix: this.sgNameToListId(sgName)
+      row: this.sgNameToListId(sgName)
     })],
     mountTables: [vanadium.naming.join(mtName, 'rendezvous')]
   });
