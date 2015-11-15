@@ -1,7 +1,12 @@
 SHELL := /bin/bash -euo pipefail
-# Add $JIRI_ROOT/devtools/bin to PATH in case the user hasn't done so in their
-# ~/.bashrc.
-export PATH := node_modules/.bin:$(JIRI_ROOT)/devtools/bin:$(JIRI_ROOT)/release/go/bin:$(JIRI_ROOT)/third_party/cout/node/bin:$(PATH)
+
+# Add $JIRI_ROOT/devtools/bin to PATH (for the jiri tool) in case the user
+# hasn't done so in their ~/.bashrc.
+export PATH := $(JIRI_ROOT)/devtools/bin:$(PATH)
+
+# Add a few more things to PATH.
+NODE_DIR := $(shell jiri v23-profile list --info Target.InstallationDir nodejs)
+export PATH := node_modules/.bin:$(JIRI_ROOT)/release/go/bin:$(NODE_DIR)/bin:$(PATH)
 
 # Default browserify options: use sourcemaps.
 BROWSERIFY_OPTS := --debug
