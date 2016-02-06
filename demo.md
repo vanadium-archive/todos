@@ -79,5 +79,5 @@ app will use `/localhost:5001` as the mount table name, and remote peers will
 not be able to contact the syncgroup. If we switch to a "predefined, global
 mount table" model, this will no longer be an issue.
 
-[install]: https://github.com/vanadium/docs/blob/master/installation.md
-[crx]: https://github.com/vanadium/docs/blob/master/tools/vanadium-chrome-extension.md
+[install]: https://vanadium.github.io/installation/
+[crx]: https://vanadium.github.io/tools/vanadium-chrome-extension.html

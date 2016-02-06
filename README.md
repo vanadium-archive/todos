@@ -149,7 +149,7 @@ close the Chrome JavaScript console.
 [syncbase]: https://docs.google.com/document/d/12wS_IEPf8HTE7598fcmlN-Y692OWMSneoe2tvyBEpi0/edit#
 [meteor-todos]: https://github.com/meteor/simple-todos
 [requirements]: https://docs.google.com/document/d/13pbomPQu73Nug8RletnbkqXooPtKMCwPKW9cVYQi_jY/edit
-[install]: https://github.com/vanadium/docs/blob/master/installation.md
-[crx]: https://github.com/vanadium/docs/blob/master/tools/vanadium-chrome-extension.md
+[install]: https://vanadium.github.io/installation/
+[crx]: https://vanadium.github.io/tools/vanadium-chrome-extension.html
 [design]: https://docs.google.com/document/d/1GtBk75QmjSorUW6T6BATCoiS_LTqOrGksgqjqJ1Hiow/edit
 [demo-sync-setup]: https://docs.google.com/document/d/1174a7LIL8jnV1fN174PPV4fO74LGNLi6ODAFEp5l5Rw/edit
