@@ -5,7 +5,7 @@ SHELL := /bin/bash -euo pipefail
 export PATH := $(JIRI_ROOT)/devtools/bin:$(PATH)
 
 # Add a few more things to PATH.
-NODE_DIR := $(shell jiri v23-profile list --info Target.InstallationDir nodejs)
+NODE_DIR := $(shell jiri profile list --info Target.InstallationDir v23:nodejs)
 export PATH := node_modules/.bin:$(JIRI_ROOT)/release/go/bin:$(NODE_DIR)/bin:$(PATH)
 
 # Default browserify options: use sourcemaps.
