@@ -1,3 +1,5 @@
+# Warning: most of this code and documentation is stale!
+
 # Todos app
 
 Todos is an example app that demonstrates use of [Syncbase][syncbase], and is
@@ -146,7 +148,7 @@ To run a simple benchmark (parallel 100 puts, followed by a scan of those rows),
 specify query param `bm=1`. For meaningful performance measurements, be sure to
 close the Chrome JavaScript console.
 
-[syncbase]: https://docs.google.com/document/d/12wS_IEPf8HTE7598fcmlN-Y692OWMSneoe2tvyBEpi0/edit#
+[syncbase]: http://vanadium.github.io/concepts/syncbase-overview.html
 [meteor-todos]: https://github.com/meteor/simple-todos
 [requirements]: https://docs.google.com/document/d/13pbomPQu73Nug8RletnbkqXooPtKMCwPKW9cVYQi_jY/edit
 [install]: https://vanadium.github.io/installation/
