@@ -1,0 +1,52 @@
+// Copyright 2016 The Vanadium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package io.v.todos;
+
+import android.support.v7.widget.RecyclerView;
+import android.view.View;
+import android.widget.ImageView;
+import android.widget.TextView;
+
+/**
+ * Created by alexfandrianto on 4/12/16.
+ */
+public class TaskViewHolder extends RecyclerView.ViewHolder{
+    private View myView;
+    private boolean showDone = true;
+
+    public TaskViewHolder(View itemView) {
+        super(itemView);
+
+        myView = itemView;
+    }
+
+    public void bindTask(Task task, View.OnClickListener listener) {
+        // TODO(alexfandrianto): Now might be a good time to set data in myView.
+
+        final ImageView doneMark = (ImageView)myView.findViewById(R.id.task_done);
+        doneMark.setVisibility(task.getDone() ? View.VISIBLE : View.GONE);
+
+        final TextView name=(TextView)myView.findViewById(R.id.task_text);
+        name.setText(task.getText());
+
+        final TextView created=(TextView)myView.findViewById(R.id.task_time);
+        created.setText(computeCreated(task));
+
+        myView.setBackgroundColor(task.getDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
+
+        myView.setTag(task.getKey());
+        myView.setOnClickListener(listener);
+
+        myView.setVisibility(!showDone && task.getDone() ? View.GONE : View.VISIBLE);
+    }
+
+    private String computeCreated(Task task) {
+        return "" + task.getAddedAt();
+    }
+
+    public void setShowDone(boolean showDone) {
+        this.showDone = showDone;
+    }
+}
