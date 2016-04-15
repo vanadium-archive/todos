@@ -13,7 +13,6 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
-import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.util.Log;
@@ -29,6 +28,8 @@ import com.firebase.client.DataSnapshot;
 import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
 import com.firebase.client.ValueEventListener;
+
+import io.v.todos.persistence.FirebasePersistence;
 
 /**
  * TodoListActivity for Vanadium TODOs
@@ -164,7 +165,7 @@ public class TodoListActivity extends Activity {
         }).attachToRecyclerView(recyclerView);
 
         // Prepare our Firebase Reference and the primary listener (SNACKOOS).
-        FirebaseSingleton.getDatabase(this);
+        FirebasePersistence.getDatabase(this);
         myFirebaseRef = new Firebase(MainActivity.FIREBASE_EXAMPLE_URL);
         setUpSnackoo();
         setUpSnackoos();

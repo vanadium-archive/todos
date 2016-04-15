@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package io.v.todos;
+package io.v.todos.persistence;
 
 import android.content.Context;
 
@@ -14,10 +14,10 @@ import com.firebase.client.Firebase;
  *
  * @author alexfandrianto
  */
-public class FirebaseSingleton {
-    private FirebaseSingleton() {} // Marked private to prevent accidental instantiation.
+public class FirebasePersistence {
+    private FirebasePersistence() {} // Marked private to prevent accidental instantiation.
 
-    private static FirebaseSingleton singleton;
+    private static FirebasePersistence singleton;
 
     /**
      * Obtain a database singleton that can be used to manipulate data.
@@ -25,9 +25,9 @@ public class FirebaseSingleton {
      * @param context An Android context, usually from an Android activity or application.
      * @return
      */
-    public synchronized static FirebaseSingleton getDatabase(Context context) {
+    public synchronized static FirebasePersistence getDatabase(Context context) {
         if (singleton == null) {
-            singleton = new FirebaseSingleton();
+            singleton = new FirebasePersistence();
 
             // Set up Firebase with the context and have it persist data locally even when offline.
             Firebase.setAndroidContext(context);
