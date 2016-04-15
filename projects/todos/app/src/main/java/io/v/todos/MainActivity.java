@@ -36,6 +36,8 @@ import com.firebase.client.FirebaseError;
  * - Tap on a Todo List to launch its corresponding TodoListActivity.
  * - Swipe Left on a Todo List to delete it.
  * - Swipe Right in order to mark all of its Tasks as done.
+ *
+ * @author alexfandrianto
  */
 public class MainActivity extends Activity {
     static final String FIREBASE_EXAMPLE_URL = "https://vivid-heat-7354.firebaseio.com/";
@@ -83,7 +85,6 @@ public class MainActivity extends Activity {
         });
 
         RecyclerView recyclerView = (RecyclerView)findViewById(R.id.recycler);
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
 
         // TODO(alexfandrianto): Very much copy-pasted between MainActivity and TodoListActivity.
@@ -115,7 +116,7 @@ public class MainActivity extends Activity {
                                 (float) itemView.getLeft() + 32,
                                 (float) itemView.getTop() + ((float) itemView.getBottom() - (float) itemView.getTop() - doneIcon.getHeight())/2,
                                 paint);
-                    } else if (dX < 0) {
+                    } else {
                         /* Set your color for negative displacement */
                         paint.setColor(0xFFFF0000);
 

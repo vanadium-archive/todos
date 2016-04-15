@@ -40,7 +40,7 @@ import com.firebase.client.ValueEventListener;
  * - Select Edit from the menu to Edit the Todo List.
  * - Toggle Show Done in the menu to show/hide completed Tasks.
  *
- * Created by alexfandrianto on 4/11/16.
+ * @author alexfandrianto
  */
 public class TodoListActivity extends Activity {
     private Firebase myFirebaseRef;
@@ -86,7 +86,6 @@ public class TodoListActivity extends Activity {
         });
 
         RecyclerView recyclerView = (RecyclerView)findViewById(R.id.recycler);
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
 
         new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
@@ -118,7 +117,7 @@ public class TodoListActivity extends Activity {
                                 (float) itemView.getLeft() + 32,
                                 (float) itemView.getTop() + ((float) itemView.getBottom() - (float) itemView.getTop() - doneIcon.getHeight())/2,
                                 paint);
-                    } else if (dX < 0) {
+                    } else {
                         /* Set your color for negative displacement */
                         paint.setColor(0xFFFF0000);
 
@@ -298,9 +297,9 @@ public class TodoListActivity extends Activity {
         todoItem.setText(snackoosList.findByKey(fbKey).getText());
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Update Task")
+                .setTitle("Editing Task")
                 .setView(todoItem)
-                .setPositiveButton("Update", new DialogInterface.OnClickListener() {
+                .setPositiveButton("Save", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
                         updateTodoItem(fbKey, todoItem.getText().toString());
                     }
@@ -322,9 +321,9 @@ public class TodoListActivity extends Activity {
         todoItem.setText(snackoo.getName());
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Update Todo List")
+                .setTitle("Editing Todo List")
                 .setView(todoItem)
-                .setPositiveButton("Update", new DialogInterface.OnClickListener() {
+                .setPositiveButton("Save", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
                         updateTodoList(todoItem.getText().toString());
                     }
@@ -354,7 +353,6 @@ public class TodoListActivity extends Activity {
     // The following methods are boilerplate for handling the Menu in the top right corner.
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        Log.d(SNACKOO_LISTS, "Am I being called?");
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_task, menu);
         return true;
@@ -362,13 +360,11 @@ public class TodoListActivity extends Activity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        Log.d(SNACKOO_LISTS, "Am I being called? 2");
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
         switch (id) {
             case R.id.show_done:
                 if(item.isChecked()){

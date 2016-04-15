@@ -9,7 +9,7 @@ import android.view.View;
 import android.widget.TextView;
 
 /**
- * Created by alexfandrianto on 4/12/16.
+ * @author alexfandrianto
  */
 public class TodoListViewHolder extends RecyclerView.ViewHolder {
     private View myView;

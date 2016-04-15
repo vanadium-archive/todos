@@ -10,7 +10,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 /**
- * Created by alexfandrianto on 4/12/16.
+ * @author alexfandrianto
  */
 public class TaskViewHolder extends RecyclerView.ViewHolder{
     private View myView;

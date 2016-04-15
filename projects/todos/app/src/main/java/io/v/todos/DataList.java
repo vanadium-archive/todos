@@ -5,6 +5,7 @@
 package io.v.todos;
 
 import java.util.ArrayList;
+import java.util.Collections;
 
 /**
  * DataList is an ArrayList with additional helper methods to keep the entries sorted.
@@ -12,24 +13,19 @@ import java.util.ArrayList;
  *
  * TODO(alexfandrianto): This should have tests.
  *
- * Created by alexfandrianto on 4/14/16.
+ * @author alexfandrianto
  */
 public class DataList<T extends KeyedData<T>> extends ArrayList<T> {
     public void insertInOrder(T item) {
-        assert item.getKey() != null;
-        for (int i = 0; i < size(); i++) {
-            if (get(i).compareTo(item) > 0) {
-                add(i, item);
-                return;
-            }
-        }
-        add(item);
+        // Note: binarySearch returns -|correct insert index| - 1 if it fails to find a match.
+        // For Java ints, this is the bitwise complement of the "correct" insertion index.
+        int insertIndex = Collections.binarySearch(this, item);
+        add(insertIndex < 0 ? ~insertIndex : insertIndex, item);
     }
 
     // We have to replace the old item while keeping sort order.
     // It is easiest to remove and then insertInOrder.
     public void updateInOrder(T item) {
-        assert item.getKey() != null;
         removeByKey(item.getKey());
         insertInOrder(item);
     }

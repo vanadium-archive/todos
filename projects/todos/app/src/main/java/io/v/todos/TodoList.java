@@ -9,7 +9,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 /**
  * TodoList is a Firebase-compatible class that tracks information regarding a particular todo list.
  *
- * Created by alexfandrianto on 4/11/16.
+ * @author alexfandrianto
  */
 @JsonIgnoreProperties({ "numCompleted", "numTasks", "done", "key" })
 public class TodoList extends KeyedData<TodoList> {

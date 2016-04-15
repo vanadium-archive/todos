@@ -8,7 +8,7 @@ package io.v.todos;
  * KeyedData represents data that has a key and is comparable.
  * Most subclasses will use this key as part of their comparison function.
  *
- * Created by alexfandrianto on 4/14/16.
+ * @author alexfandrianto
  */
 public abstract class KeyedData<T> implements Comparable<T> {
     public abstract String getKey();

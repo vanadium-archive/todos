@@ -12,7 +12,7 @@ import android.view.ViewGroup;
 import java.util.ArrayList;
 
 /**
- * Created by alexfandrianto on 4/7/16.
+ * @author alexfandrianto
  */
 public class TaskRecyclerAdapter extends RecyclerView.Adapter<TaskViewHolder> {
     private ArrayList<Task> backup;

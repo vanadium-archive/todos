@@ -9,7 +9,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 /**
  * Task is a Firebase-compatible class that tracks information regarding a particular task.
  *
- * Created by alexfandrianto on 4/11/16.
+ * @author alexfandrianto
  */
 @JsonIgnoreProperties({ "key" })
 public class Task extends KeyedData<Task> {
