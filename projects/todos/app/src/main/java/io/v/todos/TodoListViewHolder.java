@@ -4,6 +4,7 @@
 
 package io.v.todos;
 
+import android.support.v7.widget.CardView;
 import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.widget.TextView;
@@ -12,12 +13,12 @@ import android.widget.TextView;
  * @author alexfandrianto
  */
 public class TodoListViewHolder extends RecyclerView.ViewHolder {
-    private View myView;
+    private CardView myView;
 
     public TodoListViewHolder(View itemView) {
         super(itemView);
 
-        myView = itemView;
+        myView = (CardView)itemView;
     }
 
     public void bindTodoList(TodoList todoList, View.OnClickListener listener) {
@@ -32,7 +33,7 @@ public class TodoListViewHolder extends RecyclerView.ViewHolder {
         final TextView timeAgo=(TextView)myView.findViewById(R.id.todo_list_time);
         timeAgo.setText(computeTimeAgo(todoList));
 
-        myView.setBackgroundColor(todoList.getDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
+        myView.setCardBackgroundColor(todoList.getDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
 
         myView.setTag(todoList.getKey());
         myView.setOnClickListener(listener);

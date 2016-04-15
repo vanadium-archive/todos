@@ -51,7 +51,7 @@ public class TaskRecyclerAdapter extends RecyclerView.Adapter<TaskViewHolder> {
                 return i;
             }
         }
-        return 0;
+        return backup.size();
     }
 
     public void setShowDone(boolean showDone) {

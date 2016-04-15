@@ -4,6 +4,7 @@
 
 package io.v.todos;
 
+import android.support.v7.widget.CardView;
 import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.widget.ImageView;
@@ -13,13 +14,13 @@ import android.widget.TextView;
  * @author alexfandrianto
  */
 public class TaskViewHolder extends RecyclerView.ViewHolder{
-    private View myView;
+    private CardView myView;
     private boolean showDone = true;
 
     public TaskViewHolder(View itemView) {
         super(itemView);
 
-        myView = itemView;
+        myView = (CardView)itemView;
     }
 
     public void bindTask(Task task, View.OnClickListener listener) {
@@ -34,7 +35,7 @@ public class TaskViewHolder extends RecyclerView.ViewHolder{
         final TextView created=(TextView)myView.findViewById(R.id.task_time);
         created.setText(computeCreated(task));
 
-        myView.setBackgroundColor(task.getDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
+        myView.setCardBackgroundColor(task.getDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
 
         myView.setTag(task.getKey());
         myView.setOnClickListener(listener);

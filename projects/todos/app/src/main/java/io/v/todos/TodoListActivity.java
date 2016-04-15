@@ -163,11 +163,8 @@ public class TodoListActivity extends Activity {
             }
         }).attachToRecyclerView(recyclerView);
 
-        // Set up Firebase with the context and tell it to persist data locally even if we're offline.
-        Firebase.setAndroidContext(this);
-        //Firebase.getDefaultConfig().setPersistenceEnabled(true);
-
         // Prepare our Firebase Reference and the primary listener (SNACKOOS).
+        FirebaseSingleton.getDatabase(this);
         myFirebaseRef = new Firebase(MainActivity.FIREBASE_EXAMPLE_URL);
         setUpSnackoo();
         setUpSnackoos();

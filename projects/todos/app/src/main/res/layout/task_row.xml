@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/root"
+<android.support.v7.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    xmlns:card_view="http://schemas.android.com/apk/res-auto"
+    android:layout_marginBottom="1dp"
+    card_view:cardElevation="1dp"
+    card_view:cardBackgroundColor="#DDDDFF"
+    card_view:cardCornerRadius="5dp">
 
     <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
         android:orientation="horizontal"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:id="@+id/row">
+        android:layout_height="wrap_content">
 
         <ImageView android:id="@+id/task_done"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_weight = "0"
             android:src="@android:drawable/checkbox_on_background"
             android:layout_gravity="center_vertical"
             android:layout_margin="@dimen/fab_margin"
@@ -29,26 +33,19 @@
                 android:layout_height="wrap_content"
                 android:layout_weight = "1"
                 android:gravity="center_vertical"
-                android:layout_alignParentTop="true"
-                android:layout_alignParentBottom="true"
                 android:textStyle="bold"
                 android:textSize="22sp"
                 android:textColor="#000000"
-                android:layout_marginTop="5dp"
-                android:layout_marginBottom="5dp" />
+                android:layout_margin="5dp"  />
 
             <TextView android:id="@+id/task_time"
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
                 android:layout_weight = "1"
                 android:gravity="center_vertical"
-                android:layout_alignParentTop="true"
-                android:layout_alignParentBottom="true"
-                android:textStyle="bold"
-                android:textSize="22sp"
-                android:textColor="#000000"
-                android:layout_marginTop="5dp"
-                android:layout_marginBottom="5dp" />
+                android:textSize="12sp"
+                android:textColor="#333333"
+                android:layout_margin="5dp" />
         </LinearLayout>
     </LinearLayout>
-</RelativeLayout>
+</android.support.v7.widget.CardView>
