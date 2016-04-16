@@ -4,39 +4,31 @@
 
 package io.v.todos;
 
-import android.support.v7.widget.CardView;
-import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.widget.TextView;
 
 /**
  * @author alexfandrianto
  */
-public class TodoListViewHolder extends RecyclerView.ViewHolder {
-    private CardView myView;
-
+public class TodoListViewHolder extends SwipeableCardViewHolder {
     public TodoListViewHolder(View itemView) {
         super(itemView);
-
-        myView = (CardView)itemView;
     }
 
     public void bindTodoList(TodoList todoList, View.OnClickListener listener) {
-        // TODO(alexfandrianto): Now might be a good time to set data in myView.
-
-        final TextView name=(TextView)myView.findViewById(R.id.todo_list_name);
+        final TextView name=(TextView) itemView.findViewById(R.id.todo_list_name);
         name.setText(todoList.getName());
 
-        final TextView completedStatus=(TextView)myView.findViewById(R.id.todo_list_completed);
+        final TextView completedStatus=(TextView) itemView.findViewById(R.id.todo_list_completed);
         completedStatus.setText(computeCompleted(todoList));
 
-        final TextView timeAgo=(TextView)myView.findViewById(R.id.todo_list_time);
+        final TextView timeAgo=(TextView) itemView.findViewById(R.id.todo_list_time);
         timeAgo.setText(computeTimeAgo(todoList));
 
-        myView.setCardBackgroundColor(todoList.getDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
+        getCardView().setCardBackgroundColor(todoList.getDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
 
-        myView.setTag(todoList.getKey());
-        myView.setOnClickListener(listener);
+        itemView.setTag(todoList.getKey());
+        itemView.setOnClickListener(listener);
     }
 
     private String computeTimeAgo(TodoList todoList) {

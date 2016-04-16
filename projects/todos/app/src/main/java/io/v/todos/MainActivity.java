@@ -7,10 +7,6 @@ package io.v.todos;
 import android.app.Activity;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.RecyclerView;
@@ -89,68 +85,7 @@ public class MainActivity extends Activity {
         recyclerView.setAdapter(adapter);
 
         // TODO(alexfandrianto): Very much copy-pasted between MainActivity and TodoListActivity.
-        new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
-                ItemTouchHelper.UP | ItemTouchHelper.DOWN,
-                ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
-            private Paint paint = new Paint();
-            private Bitmap deleteIcon = BitmapFactory.decodeResource(
-                    getResources(), android.R.drawable.ic_input_delete);
-            private Bitmap doneIcon = BitmapFactory.decodeResource(
-                    getResources(), android.R.drawable.checkbox_on_background);
-
-            @Override
-            public void onChildDraw(Canvas c, RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, float dX, float dY, int actionState, boolean isCurrentlyActive) {
-                // TODO(alexfandrianto): Refactor further. Is there another way to do this?
-                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE) {
-                    // Get RecyclerView item from the ViewHolder
-                    View itemView = viewHolder.itemView;
-
-                    if (dX > 0) {
-                        /* Set your color for positive displacement */
-                        paint.setColor(0xFF00FF00);
-
-                        // Draw Rect with varying right side, equal to displacement dX
-                        c.drawRect((float) itemView.getLeft(), (float) itemView.getTop(), dX,
-                                (float) itemView.getBottom(), paint);
-
-                        c.drawBitmap(doneIcon,
-                                (float) itemView.getLeft() + 32,
-                                (float) itemView.getTop() + ((float) itemView.getBottom() - (float) itemView.getTop() - doneIcon.getHeight())/2,
-                                paint);
-                    } else {
-                        /* Set your color for negative displacement */
-                        paint.setColor(0xFFFF0000);
-
-                        // Draw Rect with varying left side, equal to the item's right side plus negative displacement dX
-                        c.drawRect((float) itemView.getRight() + dX, (float) itemView.getTop(),
-                                (float) itemView.getRight(), (float) itemView.getBottom(), paint);
-
-
-                        //Set the image icon for Left swipe
-                        c.drawBitmap(deleteIcon,
-                                (float) itemView.getRight() - 32 - deleteIcon.getWidth(),
-                                (float) itemView.getTop() + ((float) itemView.getBottom() - (float) itemView.getTop() - deleteIcon.getHeight())/2,
-                                paint);
-                    }
-
-                    super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive);
-                }
-            }
-
-            @Override
-            public boolean onMove(final RecyclerView recyclerView,
-                                  final RecyclerView.ViewHolder viewHolder,
-                                  final RecyclerView.ViewHolder target) {
-
-
-                /*editListStructure(l -> l.add(target.getAdapterPosition(),
-                        l.remove(viewHolder.getAdapterPosition())));*/
-
-                // TODO(alexfandrianto): Actually, I really doubt that we want to do this. It's super complex..
-                Log.d(SNACKOOS, "Moving is hard.");
-                return false;
-            }
-
+        new ItemTouchHelper(new SwipeableTouchHelperCallback() {
             @Override
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
                 if (direction == ItemTouchHelper.RIGHT) {
