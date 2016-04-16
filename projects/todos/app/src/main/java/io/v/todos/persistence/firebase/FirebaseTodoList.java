@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package io.v.todos.persistence;
+package io.v.todos.persistence.firebase;
 
 import android.content.Context;
 
@@ -14,6 +14,8 @@ import com.firebase.client.ValueEventListener;
 
 import io.v.todos.Task;
 import io.v.todos.TodoList;
+import io.v.todos.persistence.TodoListListener;
+import io.v.todos.persistence.TodoListPersistence;
 
 public class FirebaseTodoList extends FirebasePersistence implements TodoListPersistence {
     public static final String TASKS = "snackoo lists (Task)";
@@ -35,7 +37,7 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
                 if (todoList == null) {
                     listener.onDelete();
                 } else {
-                    listener.onChange(todoList);
+                    listener.onUpdate(todoList);
                 }
             }
 
@@ -46,7 +48,7 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
         });
 
         mTasksListener = mTasks.addChildEventListener(
-                new FirebaseChildEventListenerAdapter<>(Task.class, listener));
+                new ChildEventListenerAdapter<>(Task.class, listener));
     }
 
     @Override

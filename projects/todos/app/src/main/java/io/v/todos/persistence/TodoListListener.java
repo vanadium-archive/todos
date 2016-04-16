@@ -8,6 +8,6 @@ import io.v.todos.Task;
 import io.v.todos.TodoList;
 
 public interface TodoListListener extends ListEventListener<Task> {
-    void onChange(TodoList value);
+    void onUpdate(TodoList value);
     void onDelete();
 }

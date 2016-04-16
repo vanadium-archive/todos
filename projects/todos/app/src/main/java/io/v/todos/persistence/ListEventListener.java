@@ -5,7 +5,7 @@
 package io.v.todos.persistence;
 
 public interface ListEventListener<T> {
-    void onInsert(T item);
-    void onUpdate(T item);
-    void onDelete(String key);
+    void onItemAdd(T item);
+    void onItemUpdate(T item);
+    void onItemDelete(String key);
 }

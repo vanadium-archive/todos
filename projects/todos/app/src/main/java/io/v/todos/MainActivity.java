@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
 
         mPersistence = PersistenceFactory.getMainPersistence(this, new ListEventListener<TodoList>() {
             @Override
-            public void onInsert(TodoList item) {
+            public void onItemAdd(TodoList item) {
                 snackoosList.insertInOrder(item);
                 adapter.notifyDataSetChanged();
 
@@ -101,13 +101,13 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public void onUpdate(TodoList item) {
+            public void onItemUpdate(TodoList item) {
                 snackoosList.updateInOrder(item);
                 adapter.notifyDataSetChanged();
             }
 
             @Override
-            public void onDelete(String key) {
+            public void onItemDelete(String key) {
                 snackoosList.removeByKey(key);
                 adapter.notifyDataSetChanged();
 

@@ -2,11 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package io.v.todos.persistence;
+package io.v.todos.persistence.firebase;
 
 import android.content.Context;
 
 import com.firebase.client.Firebase;
+
+import io.v.todos.persistence.Persistence;
 
 /**
  * TODO(alexfandrianto): We may want to shove a lot more into this class and have it subclass

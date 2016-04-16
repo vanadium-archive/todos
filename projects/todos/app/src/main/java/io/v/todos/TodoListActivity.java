@@ -88,7 +88,7 @@ public class TodoListActivity extends Activity {
         mPersistence = PersistenceFactory.getTodoListPersistence(this, snackooKey,
                 new TodoListListener() {
             @Override
-            public void onChange(TodoList value) {
+            public void onUpdate(TodoList value) {
                 snackoo = value;
                 getActionBar().setTitle(snackoo.getName());
             }
@@ -99,20 +99,20 @@ public class TodoListActivity extends Activity {
             }
 
             @Override
-            public void onInsert(Task item) {
+            public void onItemAdd(Task item) {
                 snackoosList.insertInOrder(item);
                 adapter.notifyDataSetChanged();
                 setEmptyVisiblity();
             }
 
             @Override
-            public void onUpdate(Task item) {
+            public void onItemUpdate(Task item) {
                 snackoosList.updateInOrder(item);
                 adapter.notifyDataSetChanged();
             }
 
             @Override
-            public void onDelete(String key) {
+            public void onItemDelete(String key) {
                 snackoosList.removeByKey(key);
                 adapter.notifyDataSetChanged();
                 setEmptyVisiblity();

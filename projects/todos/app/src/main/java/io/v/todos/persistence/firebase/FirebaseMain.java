@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package io.v.todos.persistence;
+package io.v.todos.persistence.firebase;
 
 import android.content.Context;
 
@@ -10,6 +10,8 @@ import com.firebase.client.ChildEventListener;
 import com.firebase.client.Firebase;
 
 import io.v.todos.TodoList;
+import io.v.todos.persistence.ListEventListener;
+import io.v.todos.persistence.MainPersistence;
 
 public class FirebaseMain extends FirebasePersistence implements MainPersistence {
     public static final String TODO_LISTS = "snackoos (TodoList)";
@@ -23,7 +25,7 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
         mTodoLists = getFirebase().child(TODO_LISTS);
 
         mTodoListsListener = mTodoLists.addChildEventListener(
-                new FirebaseChildEventListenerAdapter<>(TodoList.class, listener));
+                new ChildEventListenerAdapter<>(TodoList.class, listener));
     }
 
     @Override

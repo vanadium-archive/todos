@@ -2,19 +2,20 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package io.v.todos.persistence;
+package io.v.todos.persistence.firebase;
 
 import com.firebase.client.ChildEventListener;
 import com.firebase.client.DataSnapshot;
 import com.firebase.client.FirebaseError;
 
 import io.v.todos.KeyedData;
+import io.v.todos.persistence.ListEventListener;
 
-public class FirebaseChildEventListenerAdapter<T extends KeyedData> implements ChildEventListener {
+public class ChildEventListenerAdapter<T extends KeyedData> implements ChildEventListener {
     private final Class<T> mType;
     private final ListEventListener<T> mDelegate;
 
-    public FirebaseChildEventListenerAdapter(Class<T> type, ListEventListener<T> delegate) {
+    public ChildEventListenerAdapter(Class<T> type, ListEventListener<T> delegate) {
         mType = type;
         mDelegate = delegate;
     }
@@ -23,19 +24,19 @@ public class FirebaseChildEventListenerAdapter<T extends KeyedData> implements C
     public void onChildAdded(DataSnapshot dataSnapshot, String prevKey) {
         T value = dataSnapshot.getValue(mType);
         value.setKey(dataSnapshot.getKey());
-        mDelegate.onInsert(value);
+        mDelegate.onItemAdd(value);
     }
 
     @Override
     public void onChildChanged(DataSnapshot dataSnapshot, String prevKey) {
         T value = dataSnapshot.getValue(mType);
         value.setKey(dataSnapshot.getKey());
-        mDelegate.onUpdate(value);
+        mDelegate.onItemUpdate(value);
     }
 
     @Override
     public void onChildRemoved(DataSnapshot dataSnapshot) {
-        mDelegate.onDelete(dataSnapshot.getKey());
+        mDelegate.onItemDelete(dataSnapshot.getKey());
     }
 
     @Override
