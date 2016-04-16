@@ -11,7 +11,6 @@ import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -19,14 +18,9 @@ import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.Toolbar;
 
-import com.firebase.client.ChildEventListener;
-import com.firebase.client.DataSnapshot;
-import com.firebase.client.Firebase;
-import com.firebase.client.FirebaseError;
-import com.firebase.client.ValueEventListener;
-
-import io.v.todos.persistence.Persistence;
 import io.v.todos.persistence.PersistenceFactory;
+import io.v.todos.persistence.TodoListListener;
+import io.v.todos.persistence.TodoListPersistence;
 
 /**
  * TodoListActivity for Vanadium TODOs
@@ -41,11 +35,8 @@ import io.v.todos.persistence.PersistenceFactory;
  * @author alexfandrianto
  */
 public class TodoListActivity extends Activity {
-    private Persistence mPersistence;
-    private Firebase myFirebaseRef;
+    private TodoListPersistence mPersistence;
 
-    private final static String SNACKOO_LISTS = "snackoo lists (Task)";
-    private String snackooKey;
     private TodoList snackoo;
     private DataList<Task> snackoosList = new DataList<Task>();
     private boolean showDone = false; // TODO(alexfandrianto): Load from shared preferences...
@@ -53,13 +44,9 @@ public class TodoListActivity extends Activity {
     // This adapter handle mirrors the firebase list values and generates the corresponding todo
     // item View children for a list view.
     private TaskRecyclerAdapter adapter;
-    private ValueEventListener snackooEventListener;
-    private ChildEventListener snackoosEventListener;
 
     @Override
     protected void onDestroy() {
-        myFirebaseRef.removeEventListener(snackooEventListener);
-        myFirebaseRef.removeEventListener(snackoosEventListener);
         mPersistence.close();
         super.onDestroy();
     }
@@ -69,13 +56,12 @@ public class TodoListActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         Intent intent = getIntent();
-        snackooKey = intent.getStringExtra(MainActivity.INTENT_SNACKOO_KEY);
+        String snackooKey = intent.getStringExtra(MainActivity.INTENT_SNACKOO_KEY);
 
         Toolbar toolbar = (Toolbar)findViewById(R.id.toolbar);
         setActionBar(toolbar);
 
         // Set up the todo list adapter
-        final Activity self = this;
         adapter = new TaskRecyclerAdapter(snackoosList, new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -92,46 +78,44 @@ public class TodoListActivity extends Activity {
             @Override
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
                 if (direction == ItemTouchHelper.RIGHT) {
-                    Log.d(SNACKOO_LISTS, "Gonna mark all tasks as done");
                     markAsDone((String)viewHolder.itemView.getTag());
                 } else if (direction == ItemTouchHelper.LEFT) {
-                    Log.d(SNACKOO_LISTS, "Gonna delete this todo list");
                     deleteTodoItem((String)viewHolder.itemView.getTag());
                 }
             }
         }).attachToRecyclerView(recyclerView);
 
-        // Prepare our Firebase Reference and the primary listener (SNACKOOS).
-        mPersistence = PersistenceFactory.getPersistence(this);
-        myFirebaseRef = new Firebase(MainActivity.FIREBASE_EXAMPLE_URL);
-        setUpSnackoo();
-        setUpSnackoos();
-    }
-
-    private Firebase firebaseListReference() {
-        return myFirebaseRef.child(MainActivity.SNACKOOS).child(snackooKey);
-    }
-
-    private Firebase firebaseTasksReference() {
-        return myFirebaseRef.child(SNACKOO_LISTS).child(snackooKey);
-    }
-
-    private void setUpSnackoo() {
-        snackooEventListener = firebaseListReference().addValueEventListener(new ValueEventListener() {
+        mPersistence = PersistenceFactory.getTodoListPersistence(this, snackooKey,
+                new TodoListListener() {
             @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                snackoo = dataSnapshot.getValue(TodoList.class);
-                if (snackoo == null) {
-                    // The list has been deleted. Get the heck out of here!
-                    finish();
-                    return;
-                }
+            public void onChange(TodoList value) {
+                snackoo = value;
                 getActionBar().setTitle(snackoo.getName());
             }
 
             @Override
-            public void onCancelled(FirebaseError firebaseError) {
+            public void onDelete() {
+                finish();
+            }
 
+            @Override
+            public void onInsert(Task item) {
+                snackoosList.insertInOrder(item);
+                adapter.notifyDataSetChanged();
+                setEmptyVisiblity();
+            }
+
+            @Override
+            public void onUpdate(Task item) {
+                snackoosList.updateInOrder(item);
+                adapter.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onDelete(String key) {
+                snackoosList.removeByKey(key);
+                adapter.notifyDataSetChanged();
+                setEmptyVisiblity();
             }
         });
     }
@@ -142,71 +126,27 @@ public class TodoListActivity extends Activity {
         v.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 
-    // Any time a child of SNACKOOS is added/changed/removed, we mirror the changes locally.
-    private void setUpSnackoos() {
-        snackoosEventListener = firebaseTasksReference().addChildEventListener(new ChildEventListener() {
-            @Override
-            public void onChildAdded(DataSnapshot dataSnapshot, String prevKey) {
-                String fbKey = dataSnapshot.getKey();
-                Task task = dataSnapshot.getValue(Task.class);
-                task.setKey(fbKey);
-                snackoosList.insertInOrder(task);
-                adapter.notifyDataSetChanged();
-
-                setEmptyVisiblity();
-            }
-
-            @Override
-            public void onChildChanged(DataSnapshot dataSnapshot, String prevKey) {
-                String fbKey = dataSnapshot.getKey();
-                Task task = dataSnapshot.getValue(Task.class);
-                task.setKey(fbKey);
-                snackoosList.updateInOrder(task);
-                adapter.notifyDataSetChanged();
-            }
-
-            @Override
-            public void onChildRemoved(DataSnapshot dataSnapshot) {
-                String fbKey = dataSnapshot.getKey();
-                snackoosList.removeByKey(fbKey);
-                adapter.notifyDataSetChanged();
-
-                setEmptyVisiblity();
-            }
-
-            @Override
-            public void onChildMoved(DataSnapshot dataSnapshot, String prevKey) {
-
-            }
-
-            @Override
-            public void onCancelled(FirebaseError firebaseError) {
-
-            }
-        });
-    }
-
     public void addTodoItem(String todo) {
         // TODO(alexfandrianto): Turns out these are all batch changes that change the parents updatedAt
-        firebaseTasksReference().push().setValue(new Task(todo));
+        mPersistence.addTask(new Task(todo));
     }
 
     public void updateTodoItem(String fbKey, String todo) {
         // TODO(alexfandrianto): Turns out these are all batch changes that change the parents updatedAt
         Task task = snackoosList.findByKey(fbKey).copy();
         task.setText(todo);
-        firebaseTasksReference().child(fbKey).setValue(task);
+        mPersistence.updateTask(task);
     }
     public void markAsDone(String fbKey) {
         // TODO(alexfandrianto): Turns out these are all batch changes that change the parents updatedAt
         Task task = snackoosList.findByKey(fbKey).copy();
         task.setDone(!task.getDone());
-        firebaseTasksReference().child(fbKey).setValue(task);
+        mPersistence.updateTask(task);
     }
 
     public void deleteTodoItem(String fbKey) {
         // TODO(alexfandrianto): Turns out these are all batch changes that change the parents updatedAt
-        firebaseTasksReference().child(fbKey).removeValue();
+        mPersistence.deleteTask(fbKey);
     }
 
     public void addCallback(View view) {
@@ -224,7 +164,8 @@ public class TodoListActivity extends Activity {
                     public void onClick(DialogInterface dialog, int whichButton) {
                     }
                 }).show();
-        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        dialog.getWindow().setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
     }
 
     private void initiateTaskEdit(final String fbKey) {
@@ -248,7 +189,8 @@ public class TodoListActivity extends Activity {
                     public void onClick(DialogInterface dialog, int whichButton) {
                     }
                 }).show();
-        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        dialog.getWindow().setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
     }
 
     private void initiateTodoListEdit() {
@@ -272,16 +214,17 @@ public class TodoListActivity extends Activity {
                     public void onClick(DialogInterface dialog, int whichButton) {
                     }
                 }).show();
-        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        dialog.getWindow().setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
     }
 
 
     public void updateTodoList(String todo) {
-        firebaseListReference().setValue(new TodoList(todo));
+        mPersistence.updateTodoList(new TodoList(todo));
     }
 
     public void deleteTodoList() {
-        firebaseListReference().removeValue();
+        mPersistence.deleteTodoList();
     }
 
 

@@ -10,6 +10,7 @@ package io.v.todos;
  *
  * @author alexfandrianto
  */
-public abstract class KeyedData<T> implements Comparable<T> {
-    public abstract String getKey();
+public interface KeyedData<T> extends Comparable<T> {
+    String getKey();
+    void setKey(String key);
 }

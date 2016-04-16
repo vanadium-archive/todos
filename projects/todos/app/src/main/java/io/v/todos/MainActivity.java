@@ -11,7 +11,6 @@ import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -19,12 +18,8 @@ import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.Toolbar;
 
-import com.firebase.client.ChildEventListener;
-import com.firebase.client.DataSnapshot;
-import com.firebase.client.Firebase;
-import com.firebase.client.FirebaseError;
-
-import io.v.todos.persistence.Persistence;
+import io.v.todos.persistence.ListEventListener;
+import io.v.todos.persistence.MainPersistence;
 import io.v.todos.persistence.PersistenceFactory;
 
 /**
@@ -38,27 +33,20 @@ import io.v.todos.persistence.PersistenceFactory;
  * @author alexfandrianto
  */
 public class MainActivity extends Activity {
-    static final String FIREBASE_EXAMPLE_URL = "https://vivid-heat-7354.firebaseio.com/";
-    private Persistence mPersistence;
-    private Firebase myFirebaseRef; // TODO(rosswang): migrate
+    private MainPersistence mPersistence;
 
     // Snackoos are the code name for the list of todos.
     // These todos are backed up at the SNACKOOS child of the Firebase URL.
     // We use the snackoosList to track a custom sorted list of the stored values.
     static final String INTENT_SNACKOO_KEY = "snackoo key";
-    static final String INTENT_SNACKOO_VALUE = "snackoo value";
-    static final String SNACKOOS = "snackoos (TodoList)";
     private DataList<TodoList> snackoosList = new DataList<TodoList>();
 
     // This adapter handle mirrors the firebase list values and generates the corresponding todo
     // item View children for a list view.
     private TodoListRecyclerAdapter adapter;
 
-    private ChildEventListener snackoosEventListener;
-
     @Override
     protected void onDestroy() {
-        myFirebaseRef.removeEventListener(snackoosEventListener);
         mPersistence.close();
         super.onDestroy();
     }
@@ -72,13 +60,12 @@ public class MainActivity extends Activity {
         getActionBar().setTitle(R.string.app_name);
 
         // Set up the todo list adapter
-        final Activity self = this;
         adapter = new TodoListRecyclerAdapter(snackoosList, new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 String fbKey = (String)view.getTag();
 
-                Intent intent = new Intent(self, TodoListActivity.class);
+                Intent intent = new Intent(MainActivity.this, TodoListActivity.class);
                 intent.putExtra(INTENT_SNACKOO_KEY, fbKey);
                 startActivity(intent);
             }
@@ -92,41 +79,19 @@ public class MainActivity extends Activity {
             @Override
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
                 if (direction == ItemTouchHelper.RIGHT) {
-                    Log.d(SNACKOOS, "Gonna mark all tasks as done");
-
-                    // TODO(alexfandrianto): This doesn't do anything yet. Should mark all child Tasks as done.
+                    // TODO(alexfandrianto): This doesn't do anything yet. Should mark all child
+                    // Tasks as done.
                     adapter.notifyDataSetChanged();
                 } else if (direction == ItemTouchHelper.LEFT) {
-                    Log.d(SNACKOOS, "Gonna delete this todo list");
-                    deleteTodoItem((String)viewHolder.itemView.getTag());
+                    mPersistence.deleteTodoList((String)viewHolder.itemView.getTag());
                 }
             }
         }).attachToRecyclerView(recyclerView);
 
-        // Prepare our Firebase Reference and the primary listener (SNACKOOS).
-        mPersistence = PersistenceFactory.getPersistence(this);
-        myFirebaseRef = new Firebase(FIREBASE_EXAMPLE_URL);
-        setUpSnackoos();
-    }
-
-    // Set the visibility based on what the adapter thinks is the visible item count.
-    private void setEmptyVisiblity() {
-        View v = findViewById(R.id.empty);
-        v.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
-    }
-
-    // Any time a child of SNACKOOS is added/changed/removed, we mirror the changes locally.
-    private void setUpSnackoos() {
-        snackoosEventListener = firebaseListReference().addChildEventListener(new ChildEventListener() {
+        mPersistence = PersistenceFactory.getMainPersistence(this, new ListEventListener<TodoList>() {
             @Override
-            public void onChildAdded(DataSnapshot dataSnapshot, String prevKey) {
-                String fbKey = dataSnapshot.getKey();
-                TodoList todoList = dataSnapshot.getValue(TodoList.class);
-                todoList.setKey(fbKey);
-
-                // Insert in order.
-                snackoosList.insertInOrder(todoList);
-
+            public void onInsert(TodoList item) {
+                snackoosList.insertInOrder(item);
                 adapter.notifyDataSetChanged();
 
                 // TODO(alexfandrianto): In order to capture the computed values for this TodoList,
@@ -136,47 +101,27 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public void onChildChanged(DataSnapshot dataSnapshot, String prevKey) {
-                String fbKey = dataSnapshot.getKey();
-                TodoList todoList = dataSnapshot.getValue(TodoList.class);
-                todoList.setKey(fbKey);
-
-                snackoosList.updateInOrder(todoList);
+            public void onUpdate(TodoList item) {
+                snackoosList.updateInOrder(item);
                 adapter.notifyDataSetChanged();
             }
 
             @Override
-            public void onChildRemoved(DataSnapshot dataSnapshot) {
-                String fbKey = dataSnapshot.getKey();
-                snackoosList.removeByKey(fbKey);
+            public void onDelete(String key) {
+                snackoosList.removeByKey(key);
                 adapter.notifyDataSetChanged();
 
                 // TODO(alexfandrianto): Stop watching the Task data for this TodoList.
 
                 setEmptyVisiblity();
             }
-
-            @Override
-            public void onChildMoved(DataSnapshot dataSnapshot, String prevKey) {
-
-            }
-
-            @Override
-            public void onCancelled(FirebaseError firebaseError) {
-
-            }
         });
     }
 
-    private Firebase firebaseListReference() {
-        return myFirebaseRef.child(SNACKOOS);
-    }
-    public void addTodoItem(String todo) {
-        firebaseListReference().push().setValue(new TodoList(todo));
-    }
-
-    public void deleteTodoItem(String fbKey) {
-        firebaseListReference().child(fbKey).removeValue();
+    // Set the visibility based on what the adapter thinks is the visible item count.
+    private void setEmptyVisiblity() {
+        View v = findViewById(R.id.empty);
+        v.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 
     public void addCallback(View view) {
@@ -187,14 +132,15 @@ public class MainActivity extends Activity {
                 .setView(todoItem)
                 .setPositiveButton("Add", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
-                        addTodoItem(todoItem.getText().toString());
+                        mPersistence.addTodoList(new TodoList(todoItem.getText().toString()));
                     }
                 })
                 .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
                     }
                 }).show();
-        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        dialog.getWindow().setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
     }
 
     // The following methods are boilerplate for handling the Menu in the top right corner.

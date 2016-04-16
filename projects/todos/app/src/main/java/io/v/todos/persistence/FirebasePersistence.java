@@ -14,11 +14,19 @@ import com.firebase.client.Firebase;
  *
  * @author alexfandrianto
  */
-public class FirebasePersistence implements Persistence {
+public abstract class FirebasePersistence implements Persistence {
+    private static final String FIREBASE_EXAMPLE_URL = "https://vivid-heat-7354.firebaseio.com/";
+
     static {
         // Set up Firebase to persist data locally even when offline. This must be set before
         // Firebase is used.
         Firebase.getDefaultConfig().setPersistenceEnabled(true);
+    }
+
+    private final Firebase mFirebase;
+
+    protected Firebase getFirebase() {
+        return mFirebase;
     }
 
     /**
@@ -30,10 +38,7 @@ public class FirebasePersistence implements Persistence {
         // This no-ops if the context has already been set, and calls getApplicationContext so we
         // don't have to worry about leaking activity contexts.
         Firebase.setAndroidContext(context);
-    }
 
-    @Override
-    public void close() {
-        // TODO(rosswang): Remove listeners.
+        mFirebase = new Firebase(FIREBASE_EXAMPLE_URL);
     }
 }

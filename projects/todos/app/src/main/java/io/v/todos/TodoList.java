@@ -12,7 +12,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @author alexfandrianto
  */
 @JsonIgnoreProperties({ "numCompleted", "numTasks", "done", "key" })
-public class TodoList extends KeyedData<TodoList> {
+public class TodoList implements KeyedData<TodoList> {
     private String name;
     private long updatedAt;
 

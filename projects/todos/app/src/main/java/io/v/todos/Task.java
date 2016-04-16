@@ -12,7 +12,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @author alexfandrianto
  */
 @JsonIgnoreProperties({ "key" })
-public class Task extends KeyedData<Task> {
+public class Task implements KeyedData<Task> {
     private String text;
     private long addedAt;
     private boolean done;
