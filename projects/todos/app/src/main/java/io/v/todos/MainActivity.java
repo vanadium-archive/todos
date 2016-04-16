@@ -24,7 +24,8 @@ import com.firebase.client.DataSnapshot;
 import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
 
-import io.v.todos.persistence.FirebasePersistence;
+import io.v.todos.persistence.Persistence;
+import io.v.todos.persistence.PersistenceFactory;
 
 /**
  * MainActivity for Vanadium TODOs
@@ -38,7 +39,8 @@ import io.v.todos.persistence.FirebasePersistence;
  */
 public class MainActivity extends Activity {
     static final String FIREBASE_EXAMPLE_URL = "https://vivid-heat-7354.firebaseio.com/";
-    private Firebase myFirebaseRef;
+    private Persistence mPersistence;
+    private Firebase myFirebaseRef; // TODO(rosswang): migrate
 
     // Snackoos are the code name for the list of todos.
     // These todos are backed up at the SNACKOOS child of the Firebase URL.
@@ -57,6 +59,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         myFirebaseRef.removeEventListener(snackoosEventListener);
+        mPersistence.close();
         super.onDestroy();
     }
 
@@ -101,7 +104,7 @@ public class MainActivity extends Activity {
         }).attachToRecyclerView(recyclerView);
 
         // Prepare our Firebase Reference and the primary listener (SNACKOOS).
-        FirebasePersistence.getDatabase(this);
+        mPersistence = PersistenceFactory.getPersistence(this);
         myFirebaseRef = new Firebase(FIREBASE_EXAMPLE_URL);
         setUpSnackoos();
     }

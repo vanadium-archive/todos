@@ -9,30 +9,31 @@ import android.content.Context;
 import com.firebase.client.Firebase;
 
 /**
- * TODO(alexfandrianto): We may want to shove a lot more into this singleton and have it subclass
+ * TODO(alexfandrianto): We may want to shove a lot more into this class and have it subclass
  * a common interface with Syncbase. I want this to also manage data watches and changes.
  *
  * @author alexfandrianto
  */
-public class FirebasePersistence {
-    private FirebasePersistence() {} // Marked private to prevent accidental instantiation.
-
-    private static FirebasePersistence singleton;
+public class FirebasePersistence implements Persistence {
+    static {
+        // Set up Firebase to persist data locally even when offline. This must be set before
+        // Firebase is used.
+        Firebase.getDefaultConfig().setPersistenceEnabled(true);
+    }
 
     /**
-     * Obtain a database singleton that can be used to manipulate data.
+     * Instantiates a persistence object that can be used to manipulate data.
      *
-     * @param context An Android context, usually from an Android activity or application.
-     * @return
+     * @param context an Android context, usually from an Android activity or application
      */
-    public synchronized static FirebasePersistence getDatabase(Context context) {
-        if (singleton == null) {
-            singleton = new FirebasePersistence();
+    public FirebasePersistence(Context context) {
+        // This no-ops if the context has already been set, and calls getApplicationContext so we
+        // don't have to worry about leaking activity contexts.
+        Firebase.setAndroidContext(context);
+    }
 
-            // Set up Firebase with the context and have it persist data locally even when offline.
-            Firebase.setAndroidContext(context);
-            Firebase.getDefaultConfig().setPersistenceEnabled(true);
-        }
-        return singleton;
+    @Override
+    public void close() {
+        // TODO(rosswang): Remove listeners.
     }
 }

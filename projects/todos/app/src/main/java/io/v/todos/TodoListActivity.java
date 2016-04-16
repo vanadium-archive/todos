@@ -25,7 +25,8 @@ import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
 import com.firebase.client.ValueEventListener;
 
-import io.v.todos.persistence.FirebasePersistence;
+import io.v.todos.persistence.Persistence;
+import io.v.todos.persistence.PersistenceFactory;
 
 /**
  * TodoListActivity for Vanadium TODOs
@@ -40,6 +41,7 @@ import io.v.todos.persistence.FirebasePersistence;
  * @author alexfandrianto
  */
 public class TodoListActivity extends Activity {
+    private Persistence mPersistence;
     private Firebase myFirebaseRef;
 
     private final static String SNACKOO_LISTS = "snackoo lists (Task)";
@@ -58,6 +60,7 @@ public class TodoListActivity extends Activity {
     protected void onDestroy() {
         myFirebaseRef.removeEventListener(snackooEventListener);
         myFirebaseRef.removeEventListener(snackoosEventListener);
+        mPersistence.close();
         super.onDestroy();
     }
 
@@ -99,7 +102,7 @@ public class TodoListActivity extends Activity {
         }).attachToRecyclerView(recyclerView);
 
         // Prepare our Firebase Reference and the primary listener (SNACKOOS).
-        FirebasePersistence.getDatabase(this);
+        mPersistence = PersistenceFactory.getPersistence(this);
         myFirebaseRef = new Firebase(MainActivity.FIREBASE_EXAMPLE_URL);
         setUpSnackoo();
         setUpSnackoos();

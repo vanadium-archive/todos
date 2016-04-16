@@ -4,8 +4,6 @@
 
 package io.v.todos.persistence;
 
-public class SyncbasePersistence implements Persistence {
-    @Override
-    public void close() {
-    }
+public interface Persistence extends AutoCloseable {
+    void close();
 }
