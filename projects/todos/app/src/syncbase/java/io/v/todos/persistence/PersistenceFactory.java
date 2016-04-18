@@ -7,8 +7,6 @@ package io.v.todos.persistence;
 import android.content.Context;
 
 import io.v.todos.TodoList;
-import io.v.todos.persistence.firebase.FirebaseMain;
-import io.v.todos.persistence.firebase.FirebaseTodoList;
 
 public final class PersistenceFactory {
     private PersistenceFactory(){}
@@ -20,8 +18,7 @@ public final class PersistenceFactory {
      */
     public static MainPersistence getMainPersistence(Context context,
                                                      ListEventListener<TodoList> listener) {
-        // TODO(rosswang): Choose this by build variant.
-        return new FirebaseMain(context, listener);
+        throw new RuntimeException("Unsupported product flavor.");
     }
 
     /**
@@ -31,7 +28,6 @@ public final class PersistenceFactory {
      */
     public static TodoListPersistence getTodoListPersistence(Context context, String key,
                                                              TodoListListener listener) {
-        // TODO(rosswang): Choose this by build variant.
-        return new FirebaseTodoList(context, key, listener);
+        throw new RuntimeException("Unsupported product flavor.");
     }
 }
