@@ -100,22 +100,24 @@ public class TodoListActivity extends Activity {
 
             @Override
             public void onItemAdd(Task item) {
-                snackoosList.insertInOrder(item);
-                adapter.notifyDataSetChanged();
+                int position = snackoosList.insertInOrder(item);
+                adapter.notifyItemInserted(position);
                 setEmptyVisiblity();
             }
 
             @Override
             public void onItemUpdate(Task item) {
-                snackoosList.updateInOrder(item);
-                adapter.notifyDataSetChanged();
+                int start = snackoosList.findIndexByKey(item.getKey());
+                int end = snackoosList.updateInOrder(item);
+                adapter.notifyItemMoved(start, end);
+                adapter.notifyItemChanged(end);
                 setEmptyVisiblity();
             }
 
             @Override
             public void onItemDelete(String key) {
-                snackoosList.removeByKey(key);
-                adapter.notifyDataSetChanged();
+                int position = snackoosList.removeByKey(key);
+                adapter.notifyItemRemoved(position);
                 setEmptyVisiblity();
             }
         });

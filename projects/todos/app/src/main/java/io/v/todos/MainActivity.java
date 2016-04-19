@@ -79,15 +79,20 @@ public class MainActivity extends Activity {
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
                 String todoListKey = (String)viewHolder.itemView.getTag();
                 if (direction == ItemTouchHelper.RIGHT) {
-                    TodoList l = snackoosList.findByKey(todoListKey);
-                    if (l != null && l.canCompleteAll()) {
-                        mPersistence.completeAllTasks(l);
-                    } else {
-                        // TODO(alexfandrianto): Can we remove this? The bug when we don't have it
-                        // here is that the swiped card doesn't return even though no data may have
-                        // been affected.
-                        adapter.notifyDataSetChanged();
+                    int position = snackoosList.findIndexByKey(todoListKey);
+                    if (position == -1) {
+                        return;
                     }
+                    TodoList l = snackoosList.get(position);
+                    if (l.canCompleteAll()) {
+                        mPersistence.completeAllTasks(l);
+                    }
+                    // TODO(alexfandrianto): Can we remove this? The bug when we don't have it
+                    // here is that the swiped card doesn't return from being swiped to the right
+                    // whether or not is it marking tasks as done or not.
+                    // Doing this causes a little bit of flicker when marking all tasks as done and
+                    // appears natural in the no-op case.
+                    adapter.notifyItemChanged(position);
                 } else if (direction == ItemTouchHelper.LEFT) {
                     mPersistence.deleteTodoList(todoListKey);
                 }
@@ -97,24 +102,26 @@ public class MainActivity extends Activity {
         mPersistence = PersistenceFactory.getMainPersistence(this, new ListEventListener<TodoList>() {
             @Override
             public void onItemAdd(TodoList item) {
-                snackoosList.insertInOrder(item);
+                int position = snackoosList.insertInOrder(item);
 
-                adapter.notifyDataSetChanged();
+                adapter.notifyItemInserted(position);
                 setEmptyVisiblity();
             }
 
             @Override
             public void onItemUpdate(TodoList item) {
-                snackoosList.updateInOrder(item);
+                int start = snackoosList.findIndexByKey(item.getKey());
+                int end = snackoosList.updateInOrder(item);
 
-                adapter.notifyDataSetChanged();
+                adapter.notifyItemMoved(start, end);
+                adapter.notifyItemChanged(end);
             }
 
             @Override
             public void onItemDelete(String key) {
-                snackoosList.removeByKey(key);
+                int position = snackoosList.removeByKey(key);
 
-                adapter.notifyDataSetChanged();
+                adapter.notifyItemRemoved(position);
                 setEmptyVisiblity();
             }
         });

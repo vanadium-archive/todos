@@ -61,8 +61,8 @@
                 android:layout_weight = "1">
 
                 <TextView android:id="@+id/todo_list_completed"
-                    android:layout_width="fill_parent"
-                    android:layout_weight = "1"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:textSize="12sp"
@@ -70,8 +70,8 @@
                     android:layout_margin="5dp" />
 
                 <TextView android:id="@+id/todo_list_time"
-                    android:layout_width="fill_parent"
-                    android:layout_weight = "1"
+                    android:layout_width="0dp"
+                    android:layout_weight="2"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:textSize="12sp"
