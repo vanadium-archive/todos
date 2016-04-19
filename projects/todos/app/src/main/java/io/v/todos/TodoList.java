@@ -41,6 +41,7 @@ public class TodoList implements KeyedData<TodoList> {
     public boolean getDone() {
         return numTasks > 0 && numCompleted == numTasks;
     }
+    public boolean canCompleteAll() { return numCompleted < numTasks; }
     public void setKey(String key) {
         this.key = key;
     }

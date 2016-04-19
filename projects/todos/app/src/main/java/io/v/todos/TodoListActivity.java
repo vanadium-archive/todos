@@ -109,6 +109,7 @@ public class TodoListActivity extends Activity {
             public void onItemUpdate(Task item) {
                 snackoosList.updateInOrder(item);
                 adapter.notifyDataSetChanged();
+                setEmptyVisiblity();
             }
 
             @Override

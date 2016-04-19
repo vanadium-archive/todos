@@ -20,18 +20,20 @@ public class ChildEventListenerAdapter<T extends KeyedData> implements ChildEven
         mDelegate = delegate;
     }
 
-    @Override
-    public void onChildAdded(DataSnapshot dataSnapshot, String prevKey) {
+    private T prepareKeyedData(DataSnapshot dataSnapshot) {
         T value = dataSnapshot.getValue(mType);
         value.setKey(dataSnapshot.getKey());
-        mDelegate.onItemAdd(value);
+        return value;
+    }
+
+    @Override
+    public void onChildAdded(DataSnapshot dataSnapshot, String prevKey) {
+        mDelegate.onItemAdd(prepareKeyedData(dataSnapshot));
     }
 
     @Override
     public void onChildChanged(DataSnapshot dataSnapshot, String prevKey) {
-        T value = dataSnapshot.getValue(mType);
-        value.setKey(dataSnapshot.getKey());
-        mDelegate.onItemUpdate(value);
+        mDelegate.onItemUpdate(prepareKeyedData(dataSnapshot));
     }
 
     @Override

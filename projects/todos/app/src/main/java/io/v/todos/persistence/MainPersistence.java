@@ -9,4 +9,5 @@ import io.v.todos.TodoList;
 public interface MainPersistence extends Persistence {
     void addTodoList(TodoList todoList);
     void deleteTodoList(String key);
+    void completeAllTasks(TodoList todoList);
 }

@@ -74,16 +74,22 @@ public class MainActivity extends Activity {
         RecyclerView recyclerView = (RecyclerView)findViewById(R.id.recycler);
         recyclerView.setAdapter(adapter);
 
-        // TODO(alexfandrianto): Very much copy-pasted between MainActivity and TodoListActivity.
         new ItemTouchHelper(new SwipeableTouchHelperCallback() {
             @Override
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
+                String todoListKey = (String)viewHolder.itemView.getTag();
                 if (direction == ItemTouchHelper.RIGHT) {
-                    // TODO(alexfandrianto): This doesn't do anything yet. Should mark all child
-                    // Tasks as done.
-                    adapter.notifyDataSetChanged();
+                    TodoList l = snackoosList.findByKey(todoListKey);
+                    if (l != null && l.canCompleteAll()) {
+                        mPersistence.completeAllTasks(l);
+                    } else {
+                        // TODO(alexfandrianto): Can we remove this? The bug when we don't have it
+                        // here is that the swiped card doesn't return even though no data may have
+                        // been affected.
+                        adapter.notifyDataSetChanged();
+                    }
                 } else if (direction == ItemTouchHelper.LEFT) {
-                    mPersistence.deleteTodoList((String)viewHolder.itemView.getTag());
+                    mPersistence.deleteTodoList(todoListKey);
                 }
             }
         }).attachToRecyclerView(recyclerView);
@@ -92,27 +98,23 @@ public class MainActivity extends Activity {
             @Override
             public void onItemAdd(TodoList item) {
                 snackoosList.insertInOrder(item);
+
                 adapter.notifyDataSetChanged();
-
-                // TODO(alexfandrianto): In order to capture the computed values for this TodoList,
-                // we have to watch the Task's data.
-
                 setEmptyVisiblity();
             }
 
             @Override
             public void onItemUpdate(TodoList item) {
                 snackoosList.updateInOrder(item);
+
                 adapter.notifyDataSetChanged();
             }
 
             @Override
             public void onItemDelete(String key) {
                 snackoosList.removeByKey(key);
+
                 adapter.notifyDataSetChanged();
-
-                // TODO(alexfandrianto): Stop watching the Task data for this TodoList.
-
                 setEmptyVisiblity();
             }
         });
