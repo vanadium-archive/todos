@@ -24,6 +24,8 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
     private final ValueEventListener mTodoListListener;
     private final ChildEventListener mTasksListener;
 
+    private TodoList mList;
+
     public FirebaseTodoList(Context context, String todoListKey, final TodoListListener listener) {
         super(context);
 
@@ -37,6 +39,7 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
                 if (todoList == null) {
                     listener.onDelete();
                 } else {
+                    mList = todoList;
                     listener.onUpdate(todoList);
                 }
             }
@@ -64,16 +67,19 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
     @Override
     public void addTask(Task task) {
         mTasks.push().setValue(task);
+        mTodoList.setValue(new TodoList(mList.getName()));
     }
 
     @Override
     public void updateTask(Task task) {
         mTasks.child(task.getKey()).setValue(task);
+        mTodoList.setValue(new TodoList(mList.getName()));
     }
 
     @Override
     public void deleteTask(String key) {
         mTasks.child(key).removeValue();
+        mTodoList.setValue(new TodoList(mList.getName()));
     }
 
     @Override

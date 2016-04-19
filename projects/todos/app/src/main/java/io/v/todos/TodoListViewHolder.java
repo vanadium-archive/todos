@@ -32,7 +32,7 @@ public class TodoListViewHolder extends SwipeableCardViewHolder {
     }
 
     private String computeTimeAgo(TodoList todoList) {
-        return "" + todoList.getUpdatedAt();
+        return UIUtil.computeTimeAgo("Last Updated", todoList.getUpdatedAt());
     }
 
     private String computeCompleted(TodoList todoList) {

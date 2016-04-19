@@ -127,25 +127,21 @@ public class TodoListActivity extends Activity {
     }
 
     public void addTodoItem(String todo) {
-        // TODO(alexfandrianto): Turns out these are all batch changes that change the parents updatedAt
         mPersistence.addTask(new Task(todo));
     }
 
     public void updateTodoItem(String fbKey, String todo) {
-        // TODO(alexfandrianto): Turns out these are all batch changes that change the parents updatedAt
         Task task = snackoosList.findByKey(fbKey).copy();
         task.setText(todo);
         mPersistence.updateTask(task);
     }
     public void markAsDone(String fbKey) {
-        // TODO(alexfandrianto): Turns out these are all batch changes that change the parents updatedAt
         Task task = snackoosList.findByKey(fbKey).copy();
         task.setDone(!task.getDone());
         mPersistence.updateTask(task);
     }
 
     public void deleteTodoItem(String fbKey) {
-        // TODO(alexfandrianto): Turns out these are all batch changes that change the parents updatedAt
         mPersistence.deleteTask(fbKey);
     }
 

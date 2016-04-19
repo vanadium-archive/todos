@@ -37,7 +37,7 @@ public class TaskViewHolder extends SwipeableCardViewHolder {
     }
 
     private String computeCreated(Task task) {
-        return "" + task.getAddedAt();
+        return UIUtil.computeTimeAgo("Created", task.getAddedAt());
     }
 
     public void setShowDone(boolean showDone) {
