@@ -134,8 +134,8 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
     @Override
     public void close() {
         getFirebase().removeEventListener(mTodoListsListener);
-        for (String key : mTodoListTaskListeners.keySet()) {
-            getFirebase().removeEventListener(mTodoListTaskListeners.get(key));
+        for (ChildEventListener listener : mTodoListTaskListeners.values()) {
+            getFirebase().removeEventListener(listener);
         }
     }
 
