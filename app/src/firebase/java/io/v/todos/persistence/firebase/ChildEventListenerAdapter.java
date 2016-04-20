@@ -8,37 +8,20 @@ import com.firebase.client.ChildEventListener;
 import com.firebase.client.DataSnapshot;
 import com.firebase.client.FirebaseError;
 
-import io.v.todos.model.KeyedData;
-import io.v.todos.persistence.ListEventListener;
-
-public class ChildEventListenerAdapter<T extends KeyedData> implements ChildEventListener {
-    private final Class<T> mType;
-    private final ListEventListener<T> mDelegate;
-
-    public ChildEventListenerAdapter(Class<T> type, ListEventListener<T> delegate) {
-        mType = type;
-        mDelegate = delegate;
-    }
-
-    private T prepareKeyedData(DataSnapshot dataSnapshot) {
-        T value = dataSnapshot.getValue(mType);
-        value.setKey(dataSnapshot.getKey());
-        return value;
-    }
-
+/**
+ * Basic Java adapter pattern for a {@link ChildEventListener}.
+ */
+public abstract class ChildEventListenerAdapter implements ChildEventListener {
     @Override
     public void onChildAdded(DataSnapshot dataSnapshot, String prevKey) {
-        mDelegate.onItemAdd(prepareKeyedData(dataSnapshot));
     }
 
     @Override
     public void onChildChanged(DataSnapshot dataSnapshot, String prevKey) {
-        mDelegate.onItemUpdate(prepareKeyedData(dataSnapshot));
     }
 
     @Override
     public void onChildRemoved(DataSnapshot dataSnapshot) {
-        mDelegate.onItemDelete(dataSnapshot.getKey());
     }
 
     @Override

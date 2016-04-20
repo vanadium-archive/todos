@@ -49,7 +49,7 @@ public class TaskRecyclerAdapter extends RecyclerView.Adapter<TaskViewHolder> {
 
     private int nonDoneSize() {
         for (int i = 0; i < backup.size(); i++) {
-            if (backup.get(i).getDone()) {
+            if (backup.get(i).done) {
                 return i;
             }
         }

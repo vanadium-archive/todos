@@ -4,60 +4,69 @@
 
 package io.v.todos.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import android.support.annotation.NonNull;
 
 /**
- * ListMetadata is a Firebase-compatible class that tracks information regarding a particular todo list.
- *
- * @author alexfandrianto
+ * Tracks information regarding a particular todo list.
  */
-@JsonIgnoreProperties({ "numCompleted", "numTasks", "done", "key" })
-public class ListMetadata implements KeyedData<ListMetadata> {
-    private String name;
-    private long updatedAt;
+public class ListMetadata extends KeyedData<ListMetadata> {
+    public final String name;
+    public final long updatedAt;
 
-    // Not serialized.
-    public int numCompleted = 0;
-    public int numTasks = 0;
-    private String key = null; // Usually assigned for comparison/viewing.
-    //public List<String> sharedWith ??
+    public final int numCompleted;
+    public final int numTasks;
 
-    // The default constructor is used by Firebase.
-    public ListMetadata() {}
-
-    // Use this constructor when creating a new Task for the first time.
-    public ListMetadata(String name) {
+    public ListMetadata(String key, String name, long updatedAt, int numCompleted, int numTasks) {
+        super(key);
         this.name = name;
-        this.updatedAt = System.currentTimeMillis();
+        this.updatedAt = updatedAt;
+        this.numCompleted = numCompleted;
+        this.numTasks = numTasks;
     }
 
-    public String getName() {
-        return name;
-    }
-    public long getUpdatedAt() {
-        return updatedAt;
+    public ListMetadata(String key, ListSpec spec, int numCompleted, int numTasks) {
+        this(key, spec.getName(), spec.getUpdatedAt(), numCompleted, numTasks);
     }
 
-    public boolean getDone() {
+    public boolean isDone() {
         return numTasks > 0 && numCompleted == numTasks;
     }
-    public boolean canCompleteAll() { return numCompleted < numTasks; }
-    public void setKey(String key) {
-        this.key = key;
-    }
-    public String getKey() {
-        return key;
+
+    public boolean canCompleteAll() {
+        return numCompleted < numTasks;
     }
 
     @Override
-    public int compareTo(ListMetadata other) {
-        if (key == null && other.key != null) {
-            return 1;
-        } else if (key != null && other.key == null) {
-            return -1;
-        } else if (key == null && other.key == null) {
+    public boolean equals(Object o) {
+        return this == o ||
+                o instanceof ListMetadata &&
+                ((ListMetadata) o).canEqual(this) &&
+                compareTo((ListMetadata)o) == 0;
+    }
+
+    protected boolean canEqual(Object other) {
+        return other instanceof ListMetadata;
+    }
+
+    @Override
+    public int hashCode() {
+        return key.hashCode();
+    }
+
+    @Override
+    public int compareTo(@NonNull ListMetadata other) {
+        if (this == other) {
             return 0;
+        } else if (!other.canEqual(this)) {
+            throw new ClassCastException("Cannot compare " + getClass() + " to " +
+                    other.getClass());
+        } else {
+            return key.compareTo(other.key);
         }
-        return key.compareTo(other.key);
+        // TODO(rosswang): factor out ordering.
+    }
+
+    public ListSpec toSpec() {
+        return new ListSpec(name, updatedAt);
     }
 }

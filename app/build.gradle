@@ -46,5 +46,4 @@ dependencies {
             'com.android.support:recyclerview-v7:23.1.1'
     )
     firebaseCompile 'com.firebase:firebase-client-android:2.5.2'
-    syncbaseCompile 'com.fasterxml.jackson.core:jackson-annotations:2.7.3'
 }

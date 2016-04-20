@@ -19,8 +19,9 @@ import android.widget.EditText;
 import android.widget.Toolbar;
 
 import io.v.todos.model.DataList;
-import io.v.todos.model.ListMetadata;
+import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
+import io.v.todos.model.TaskSpec;
 import io.v.todos.persistence.PersistenceFactory;
 import io.v.todos.persistence.TodoListListener;
 import io.v.todos.persistence.TodoListPersistence;
@@ -40,7 +41,7 @@ import io.v.todos.persistence.TodoListPersistence;
 public class TodoListActivity extends Activity {
     private TodoListPersistence mPersistence;
 
-    private ListMetadata snackoo;
+    private ListSpec snackoo;
     private DataList<Task> snackoosList = new DataList<Task>();
     private boolean showDone = false; // TODO(alexfandrianto): Load from shared preferences...
 
@@ -91,7 +92,7 @@ public class TodoListActivity extends Activity {
         mPersistence = PersistenceFactory.getTodoListPersistence(this, snackooKey,
                 new TodoListListener() {
             @Override
-            public void onUpdate(ListMetadata value) {
+            public void onUpdate(ListSpec value) {
                 snackoo = value;
                 getActionBar().setTitle(snackoo.getName());
             }
@@ -110,7 +111,7 @@ public class TodoListActivity extends Activity {
 
             @Override
             public void onItemUpdate(Task item) {
-                int start = snackoosList.findIndexByKey(item.getKey());
+                int start = snackoosList.findIndexByKey(item.key);
                 int end = snackoosList.updateInOrder(item);
                 adapter.notifyItemMoved(start, end);
                 adapter.notifyItemChanged(end);
@@ -133,18 +134,14 @@ public class TodoListActivity extends Activity {
     }
 
     public void addTodoItem(String todo) {
-        mPersistence.addTask(new Task(todo));
+        mPersistence.addTask(new TaskSpec(todo));
     }
 
     public void updateTodoItem(String fbKey, String todo) {
-        Task task = snackoosList.findByKey(fbKey).copy();
-        task.setText(todo);
-        mPersistence.updateTask(task);
+        mPersistence.updateTask(snackoosList.findByKey(fbKey).withText(todo));
     }
     public void markAsDone(String fbKey) {
-        Task task = snackoosList.findByKey(fbKey).copy();
-        task.setDone(!task.getDone());
-        mPersistence.updateTask(task);
+        mPersistence.updateTask(snackoosList.findByKey(fbKey).withToggleDone());
     }
 
     public void deleteTodoItem(String fbKey) {
@@ -172,7 +169,7 @@ public class TodoListActivity extends Activity {
 
     private void initiateTaskEdit(final String fbKey) {
         final EditText todoItem = new EditText(this);
-        todoItem.setText(snackoosList.findByKey(fbKey).getText());
+        todoItem.setText(snackoosList.findByKey(fbKey).text);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Editing Task")
@@ -221,8 +218,8 @@ public class TodoListActivity extends Activity {
     }
 
 
-    public void updateTodoList(String todo) {
-        mPersistence.updateTodoList(new ListMetadata(todo));
+    public void updateTodoList(String name) {
+        mPersistence.updateTodoList(new ListSpec(name));
     }
 
     public void deleteTodoList() {

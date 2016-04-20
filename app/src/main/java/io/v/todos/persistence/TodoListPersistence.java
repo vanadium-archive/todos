@@ -4,13 +4,14 @@
 
 package io.v.todos.persistence;
 
-import io.v.todos.model.ListMetadata;
+import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
+import io.v.todos.model.TaskSpec;
 
 public interface TodoListPersistence extends Persistence {
-    void updateTodoList(ListMetadata listMetadata);
+    void updateTodoList(ListSpec listSpec);
     void deleteTodoList();
-    void addTask(Task task);
+    void addTask(TaskSpec task);
     void updateTask(Task task);
     void deleteTask(String key);
 }

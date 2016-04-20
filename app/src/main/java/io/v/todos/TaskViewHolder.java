@@ -22,24 +22,24 @@ public class TaskViewHolder extends SwipeableCardViewHolder {
 
     public void bindTask(Task task, View.OnClickListener listener) {
         final ImageView doneMark = (ImageView) itemView.findViewById(R.id.task_done);
-        doneMark.setVisibility(task.getDone() ? View.VISIBLE : View.GONE);
+        doneMark.setVisibility(task.done ? View.VISIBLE : View.GONE);
 
         final TextView name=(TextView) itemView.findViewById(R.id.task_text);
-        name.setText(task.getText());
+        name.setText(task.text);
 
         final TextView created=(TextView) itemView.findViewById(R.id.task_time);
         created.setText(computeCreated(task));
 
-        getCardView().setCardBackgroundColor(task.getDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
+        getCardView().setCardBackgroundColor(task.done ? 0xFFCCCCCC : 0xFFFFFFFF);
 
-        itemView.setTag(task.getKey());
+        itemView.setTag(task.key);
         itemView.setOnClickListener(listener);
 
-        itemView.setVisibility(!showDone && task.getDone() ? View.GONE : View.VISIBLE);
+        itemView.setVisibility(!showDone && task.done ? View.GONE : View.VISIBLE);
     }
 
     private String computeCreated(Task task) {
-        return UIUtil.computeTimeAgo("Created", task.getAddedAt());
+        return UIUtil.computeTimeAgo("Created", task.addedAt);
     }
 
     public void setShowDone(boolean showDone) {

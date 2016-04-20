@@ -4,10 +4,10 @@
 
 package io.v.todos.persistence;
 
+import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
-import io.v.todos.model.ListMetadata;
 
 public interface TodoListListener extends ListEventListener<Task> {
-    void onUpdate(ListMetadata value);
+    void onUpdate(ListSpec value);
     void onDelete();
 }

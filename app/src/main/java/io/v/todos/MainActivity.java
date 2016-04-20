@@ -20,6 +20,7 @@ import android.widget.Toolbar;
 
 import io.v.todos.model.DataList;
 import io.v.todos.model.ListMetadata;
+import io.v.todos.model.ListSpec;
 import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.MainPersistence;
 import io.v.todos.persistence.PersistenceFactory;
@@ -112,7 +113,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onItemUpdate(ListMetadata item) {
-                int start = snackoosList.findIndexByKey(item.getKey());
+                int start = snackoosList.findIndexByKey(item.key);
                 int end = snackoosList.updateInOrder(item);
 
                 adapter.notifyItemMoved(start, end);
@@ -143,7 +144,7 @@ public class MainActivity extends Activity {
                 .setView(todoItem)
                 .setPositiveButton("Add", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
-                        mPersistence.addTodoList(new ListMetadata(todoItem.getText().toString()));
+                        mPersistence.addTodoList(new ListSpec(todoItem.getText().toString()));
                     }
                 })
                 .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {

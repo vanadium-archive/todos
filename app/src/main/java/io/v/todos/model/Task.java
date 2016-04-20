@@ -4,78 +4,81 @@
 
 package io.v.todos.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import android.support.annotation.NonNull;
+
+import java.util.Objects;
 
 /**
  * Task is a Firebase-compatible class that tracks information regarding a particular task.
  *
  * @author alexfandrianto
  */
-@JsonIgnoreProperties({ "key" })
-public class Task implements KeyedData<Task> {
-    private String text;
-    private long addedAt;
-    private boolean done;
-
-    // Unserialized properties.
-    private String key; // Usually assigned for comparison/viewing.
-
-    // The default constructor is used by Firebase.
-    public Task() {}
+public class Task extends KeyedData<Task> {
+    public final String text;
+    public final long addedAt;
+    public final boolean done;
 
     // Use this constructor when creating a new Task for the first time.
-    public Task(String text) {
+    public Task(String key, String text, long addedAt, boolean done) {
+        super(key);
         this.text = text;
-        this.addedAt = System.currentTimeMillis();
-        this.done = false;
+        this.addedAt = addedAt;
+        this.done = done;
     }
 
-    public Task copy() {
-        Task t = new Task();
-        t.text = text;
-        t.addedAt = addedAt;
-        t.done = done;
-        t.key = key;
-        return t;
+    public Task(String key, TaskSpec spec) {
+        this(key, spec.getText(), spec.getAddedAt(), spec.getDone());
     }
 
-    public String getText() {
-        return text;
-    }
-    public long getAddedAt() {
-        return addedAt;
-    }
-    public boolean getDone() {
-        return done;
-    }
-    public void setKey(String key) {
-        this.key = key;
-    }
-    public String getKey() {
-        return key;
+    public Task withText(String value) {
+        return Objects.equals(text, value) ? this : new Task(key, value, addedAt, done);
     }
 
-    public void setText(String newText) {
-        text = newText;
-    }
-    public void setDone(boolean newDone) {
-        done = newDone;
+    public Task withToggleDone() {
+        return new Task(key, text, addedAt, !done);
     }
 
     @Override
-    public int compareTo(Task other) {
-        if (done && !other.done) {
+    public boolean equals(Object o) {
+        return this == o ||
+                o instanceof Task &&
+                ((Task) o).canEqual(this) &&
+                compareTo((Task)o) == 0;
+    }
+
+    protected boolean canEqual(Object other) {
+        return other instanceof Task;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(addedAt, done);
+    }
+
+    @Override
+    public int compareTo(@NonNull Task other) {
+        // TODO(rosswang): factor out ordering.
+        if (other == this) {
+            return 0;
+        } else if (!other.canEqual(this)) {
+            throw new ClassCastException("Cannot compare " + getClass() + " to " +
+                    other.getClass());
+        } else if (done && !other.done) {
             return 1;
         } else if (!done && other.done) {
             return -1;
-        }
-        if (key == null && other.key != null) {
+        } else if (key == null && other.key != null) {
             return 1;
         } else if (key != null && other.key == null) {
             return -1;
-        } else if (key == null && other.key == null) {
+        } else if (key == null) {
             return 0;
+        } else {
+            return key.compareTo(other.key);
         }
-        return key.compareTo(other.key);
+    }
+
+    public TaskSpec toSpec() {
+        return new TaskSpec(text, addedAt, done);
     }
 }

@@ -12,8 +12,9 @@ import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
 import com.firebase.client.ValueEventListener;
 
-import io.v.todos.model.ListMetadata;
+import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
+import io.v.todos.model.TaskSpec;
 import io.v.todos.persistence.TodoListListener;
 import io.v.todos.persistence.TodoListPersistence;
 
@@ -24,7 +25,7 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
     private final ValueEventListener mTodoListListener;
     private final ChildEventListener mTasksListener;
 
-    private ListMetadata mList;
+    private ListSpec mListSpec;
 
     public FirebaseTodoList(Context context, String todoListKey, final TodoListListener listener) {
         super(context);
@@ -35,28 +36,26 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
         mTodoListListener = mTodoList.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                ListMetadata listMetadata = dataSnapshot.getValue(ListMetadata.class);
-                if (listMetadata == null) {
+                ListSpec listSpec = dataSnapshot.getValue(ListSpec.class);
+                if (listSpec == null) {
                     listener.onDelete();
                 } else {
-                    mList = listMetadata;
-                    listener.onUpdate(listMetadata);
+                    mListSpec = listSpec;
+                    listener.onUpdate(listSpec);
                 }
             }
 
             @Override
             public void onCancelled(FirebaseError firebaseError) {
-
             }
         });
 
-        mTasksListener = mTasks.addChildEventListener(
-                new ChildEventListenerAdapter<>(Task.class, listener));
+        mTasksListener = mTasks.addChildEventListener(new TaskChildEventListener(listener));
     }
 
     @Override
-    public void updateTodoList(ListMetadata listMetadata) {
-        mTodoList.setValue(listMetadata);
+    public void updateTodoList(ListSpec listSpec) {
+        mTodoList.setValue(listSpec);
     }
 
     @Override
@@ -64,22 +63,27 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
         mTodoList.removeValue();
     }
 
+    private void updateListTimestamp() {
+        mListSpec.setUpdatedAt(System.currentTimeMillis());
+        mTodoList.setValue(mListSpec);
+    }
+
     @Override
-    public void addTask(Task task) {
+    public void addTask(TaskSpec task) {
         mTasks.push().setValue(task);
-        mTodoList.setValue(new ListMetadata(mList.getName()));
+        updateListTimestamp();
     }
 
     @Override
     public void updateTask(Task task) {
-        mTasks.child(task.getKey()).setValue(task);
-        mTodoList.setValue(new ListMetadata(mList.getName()));
+        mTasks.child(task.key).setValue(task.toSpec());
+        updateListTimestamp();
     }
 
     @Override
     public void deleteTask(String key) {
         mTasks.child(key).removeValue();
-        mTodoList.setValue(new ListMetadata(mList.getName()));
+        updateListTimestamp();
     }
 
     @Override

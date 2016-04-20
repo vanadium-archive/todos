@@ -28,7 +28,7 @@ public class DataList<T extends KeyedData<T>> extends ArrayList<T> {
     // We have to replace the old item while keeping sort order.
     // It is easiest to remove and then insertInOrder.
     public int updateInOrder(T item) {
-        removeByKey(item.getKey());
+        removeByKey(item.key);
         return insertInOrder(item);
     }
 
@@ -43,7 +43,7 @@ public class DataList<T extends KeyedData<T>> extends ArrayList<T> {
     public int findIndexByKey(String key) {
         for (int i = 0; i < size(); i++) {
             T oldItem = get(i);
-            if (oldItem.getKey().equals(key)) {
+            if (oldItem.key.equals(key)) {
                 return i;
             }
         }

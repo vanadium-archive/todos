@@ -19,7 +19,7 @@ public class TodoListViewHolder extends SwipeableCardViewHolder {
 
     public void bindTodoList(ListMetadata listMetadata, View.OnClickListener listener) {
         final TextView name=(TextView) itemView.findViewById(R.id.todo_list_name);
-        name.setText(listMetadata.getName());
+        name.setText(listMetadata.name);
 
         final TextView completedStatus=(TextView) itemView.findViewById(R.id.todo_list_completed);
         completedStatus.setText(computeCompleted(listMetadata));
@@ -27,18 +27,18 @@ public class TodoListViewHolder extends SwipeableCardViewHolder {
         final TextView timeAgo=(TextView) itemView.findViewById(R.id.todo_list_time);
         timeAgo.setText(computeTimeAgo(listMetadata));
 
-        getCardView().setCardBackgroundColor(listMetadata.getDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
+        getCardView().setCardBackgroundColor(listMetadata.isDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
 
-        itemView.setTag(listMetadata.getKey());
+        itemView.setTag(listMetadata.key);
         itemView.setOnClickListener(listener);
     }
 
     private String computeTimeAgo(ListMetadata listMetadata) {
-        return UIUtil.computeTimeAgo("Last Updated", listMetadata.getUpdatedAt());
+        return UIUtil.computeTimeAgo("Last Updated", listMetadata.updatedAt);
     }
 
     private String computeCompleted(ListMetadata listMetadata) {
-        if (listMetadata.getDone()) {
+        if (listMetadata.isDone()) {
             return "Done!";
         } else if (listMetadata.numTasks == 0) {
             return "Needs Tasks";

@@ -5,12 +5,15 @@
 package io.v.todos.model;
 
 /**
- * KeyedData represents data that has a key and is comparable.
- * Most subclasses will use this key as part of their comparison function.
+ * Represents data that has a key and is comparable. Most subclasses will use this key as part of
+ * their comparison function.
  *
  * @author alexfandrianto
  */
-public interface KeyedData<T> extends Comparable<T> {
-    String getKey();
-    void setKey(String key);
+public abstract class KeyedData<T> implements Comparable<T> {
+    public final String key;
+
+    protected KeyedData(String key) {
+        this.key = key;
+    }
 }

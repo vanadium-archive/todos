@@ -5,9 +5,10 @@
 package io.v.todos.persistence;
 
 import io.v.todos.model.ListMetadata;
+import io.v.todos.model.ListSpec;
 
 public interface MainPersistence extends Persistence {
-    void addTodoList(ListMetadata listMetadata);
+    void addTodoList(ListSpec listSpec);
     void deleteTodoList(String key);
     void completeAllTasks(ListMetadata listMetadata);
 }
