@@ -5,9 +5,9 @@
 package io.v.todos.persistence;
 
 import io.v.todos.model.Task;
-import io.v.todos.model.TodoList;
+import io.v.todos.model.ListMetadata;
 
 public interface TodoListListener extends ListEventListener<Task> {
-    void onUpdate(TodoList value);
+    void onUpdate(ListMetadata value);
     void onDelete();
 }

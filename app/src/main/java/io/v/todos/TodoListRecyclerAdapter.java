@@ -11,18 +11,18 @@ import android.view.ViewGroup;
 
 import java.util.ArrayList;
 
-import io.v.todos.model.TodoList;
+import io.v.todos.model.ListMetadata;
 
 /**
  * @author alexfandrianto
  */
 public class TodoListRecyclerAdapter extends RecyclerView.Adapter<TodoListViewHolder> {
-    private ArrayList<TodoList> backup;
+    private ArrayList<ListMetadata> backup;
     private View.OnClickListener itemListener;
 
     private static final int RESOURCE_ID = R.layout.todo_list_row;
 
-    public TodoListRecyclerAdapter(ArrayList<TodoList> backup, View.OnClickListener itemListener) {
+    public TodoListRecyclerAdapter(ArrayList<ListMetadata> backup, View.OnClickListener itemListener) {
         super();
         this.backup = backup;
         this.itemListener = itemListener;
@@ -37,8 +37,8 @@ public class TodoListRecyclerAdapter extends RecyclerView.Adapter<TodoListViewHo
 
     @Override
     public void onBindViewHolder(TodoListViewHolder holder, int position) {
-        TodoList todoList = backup.get(position);
-        holder.bindTodoList(todoList, itemListener);
+        ListMetadata listMetadata = backup.get(position);
+        holder.bindTodoList(listMetadata, itemListener);
     }
 
     @Override

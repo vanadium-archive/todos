@@ -19,7 +19,7 @@ import android.widget.EditText;
 import android.widget.Toolbar;
 
 import io.v.todos.model.DataList;
-import io.v.todos.model.TodoList;
+import io.v.todos.model.ListMetadata;
 import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.MainPersistence;
 import io.v.todos.persistence.PersistenceFactory;
@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
     // These todos are backed up at the SNACKOOS child of the Firebase URL.
     // We use the snackoosList to track a custom sorted list of the stored values.
     static final String INTENT_SNACKOO_KEY = "snackoo key";
-    private DataList<TodoList> snackoosList = new DataList<TodoList>();
+    private DataList<ListMetadata> snackoosList = new DataList<ListMetadata>();
 
     // This adapter handle mirrors the firebase list values and generates the corresponding todo
     // item View children for a list view.
@@ -85,7 +85,7 @@ public class MainActivity extends Activity {
                     if (position == -1) {
                         return;
                     }
-                    TodoList l = snackoosList.get(position);
+                    ListMetadata l = snackoosList.get(position);
                     if (l.canCompleteAll()) {
                         mPersistence.completeAllTasks(l);
                     }
@@ -101,9 +101,9 @@ public class MainActivity extends Activity {
             }
         }).attachToRecyclerView(recyclerView);
 
-        mPersistence = PersistenceFactory.getMainPersistence(this, new ListEventListener<TodoList>() {
+        mPersistence = PersistenceFactory.getMainPersistence(this, new ListEventListener<ListMetadata>() {
             @Override
-            public void onItemAdd(TodoList item) {
+            public void onItemAdd(ListMetadata item) {
                 int position = snackoosList.insertInOrder(item);
 
                 adapter.notifyItemInserted(position);
@@ -111,7 +111,7 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public void onItemUpdate(TodoList item) {
+            public void onItemUpdate(ListMetadata item) {
                 int start = snackoosList.findIndexByKey(item.getKey());
                 int end = snackoosList.updateInOrder(item);
 
@@ -143,7 +143,7 @@ public class MainActivity extends Activity {
                 .setView(todoItem)
                 .setPositiveButton("Add", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
-                        mPersistence.addTodoList(new TodoList(todoItem.getText().toString()));
+                        mPersistence.addTodoList(new ListMetadata(todoItem.getText().toString()));
                     }
                 })
                 .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {

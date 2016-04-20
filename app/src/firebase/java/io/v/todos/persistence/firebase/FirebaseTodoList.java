@@ -12,8 +12,8 @@ import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
 import com.firebase.client.ValueEventListener;
 
+import io.v.todos.model.ListMetadata;
 import io.v.todos.model.Task;
-import io.v.todos.model.TodoList;
 import io.v.todos.persistence.TodoListListener;
 import io.v.todos.persistence.TodoListPersistence;
 
@@ -24,7 +24,7 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
     private final ValueEventListener mTodoListListener;
     private final ChildEventListener mTasksListener;
 
-    private TodoList mList;
+    private ListMetadata mList;
 
     public FirebaseTodoList(Context context, String todoListKey, final TodoListListener listener) {
         super(context);
@@ -35,12 +35,12 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
         mTodoListListener = mTodoList.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                TodoList todoList = dataSnapshot.getValue(TodoList.class);
-                if (todoList == null) {
+                ListMetadata listMetadata = dataSnapshot.getValue(ListMetadata.class);
+                if (listMetadata == null) {
                     listener.onDelete();
                 } else {
-                    mList = todoList;
-                    listener.onUpdate(todoList);
+                    mList = listMetadata;
+                    listener.onUpdate(listMetadata);
                 }
             }
 
@@ -55,8 +55,8 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
     }
 
     @Override
-    public void updateTodoList(TodoList todoList) {
-        mTodoList.setValue(todoList);
+    public void updateTodoList(ListMetadata listMetadata) {
+        mTodoList.setValue(listMetadata);
     }
 
     @Override
@@ -67,19 +67,19 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
     @Override
     public void addTask(Task task) {
         mTasks.push().setValue(task);
-        mTodoList.setValue(new TodoList(mList.getName()));
+        mTodoList.setValue(new ListMetadata(mList.getName()));
     }
 
     @Override
     public void updateTask(Task task) {
         mTasks.child(task.getKey()).setValue(task);
-        mTodoList.setValue(new TodoList(mList.getName()));
+        mTodoList.setValue(new ListMetadata(mList.getName()));
     }
 
     @Override
     public void deleteTask(String key) {
         mTasks.child(key).removeValue();
-        mTodoList.setValue(new TodoList(mList.getName()));
+        mTodoList.setValue(new ListMetadata(mList.getName()));
     }
 
     @Override

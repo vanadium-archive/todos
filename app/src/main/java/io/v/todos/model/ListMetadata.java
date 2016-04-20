@@ -7,12 +7,12 @@ package io.v.todos.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
- * TodoList is a Firebase-compatible class that tracks information regarding a particular todo list.
+ * ListMetadata is a Firebase-compatible class that tracks information regarding a particular todo list.
  *
  * @author alexfandrianto
  */
 @JsonIgnoreProperties({ "numCompleted", "numTasks", "done", "key" })
-public class TodoList implements KeyedData<TodoList> {
+public class ListMetadata implements KeyedData<ListMetadata> {
     private String name;
     private long updatedAt;
 
@@ -23,10 +23,10 @@ public class TodoList implements KeyedData<TodoList> {
     //public List<String> sharedWith ??
 
     // The default constructor is used by Firebase.
-    public TodoList() {}
+    public ListMetadata() {}
 
     // Use this constructor when creating a new Task for the first time.
-    public TodoList(String name) {
+    public ListMetadata(String name) {
         this.name = name;
         this.updatedAt = System.currentTimeMillis();
     }
@@ -50,7 +50,7 @@ public class TodoList implements KeyedData<TodoList> {
     }
 
     @Override
-    public int compareTo(TodoList other) {
+    public int compareTo(ListMetadata other) {
         if (key == null && other.key != null) {
             return 1;
         } else if (key != null && other.key == null) {

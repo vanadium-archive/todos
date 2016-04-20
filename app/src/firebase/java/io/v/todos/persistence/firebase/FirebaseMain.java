@@ -16,8 +16,8 @@ import com.firebase.client.Transaction;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.v.todos.model.ListMetadata;
 import io.v.todos.model.Task;
-import io.v.todos.model.TodoList;
 import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.MainPersistence;
 
@@ -27,29 +27,29 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
     private final Firebase mTodoLists;
     private final ChildEventListener mTodoListsListener;
 
-    private final ListEventListener<TodoList> mListener;
+    private final ListEventListener<ListMetadata> mListener;
 
     private final Map<String, ChildEventListener> mTodoListTaskListeners;
     private final Map<String, TodoListTasksListener> mTodoListTrackers;
 
-    public FirebaseMain(Context context, final ListEventListener<TodoList> listener) {
+    public FirebaseMain(Context context, final ListEventListener<ListMetadata> listener) {
         super(context);
 
         mTodoLists = getFirebase().child(TODO_LISTS);
 
         // This handler will forward events to the passed in listener after ensuring that all the
-        // data in the TodoList is set and can automatically update.
+        // data in the ListMetadata is set and can automatically update.
         mTodoListsListener = mTodoLists.addChildEventListener(
-                new ChildEventListenerAdapter<>(TodoList.class, new ListEventListener<TodoList>() {
+                new ChildEventListenerAdapter<>(ListMetadata.class, new ListEventListener<ListMetadata>() {
                     @Override
-                    public void onItemAdd(TodoList item) {
+                    public void onItemAdd(ListMetadata item) {
                         // Hook up listeners for the # completed and # tasks. Then forward the item.
                         startWatchTodoListTasks(item);
                         mListener.onItemAdd(item);
                     }
 
                     @Override
-                    public void onItemUpdate(TodoList item) {
+                    public void onItemUpdate(ListMetadata item) {
                         // Retrieve # completed and # tasks. Then forward the item.
                         setTaskCompletion(item);
                         mListener.onItemUpdate(item);
@@ -69,8 +69,8 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
     }
 
     @Override
-    public void addTodoList(TodoList todoList) {
-        mTodoLists.push().setValue(todoList);
+    public void addTodoList(ListMetadata listMetadata) {
+        mTodoLists.push().setValue(listMetadata);
     }
 
     @Override
@@ -83,15 +83,15 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
     }
 
     @Override
-    public void completeAllTasks(final TodoList todoList) {
+    public void completeAllTasks(final ListMetadata listMetadata) {
         // Update all child tasks for this key to have done = true.
-        Firebase tasksRef = getFirebase().child(FirebaseTodoList.TASKS).child(todoList.getKey());
+        Firebase tasksRef = getFirebase().child(FirebaseTodoList.TASKS).child(listMetadata.getKey());
         tasksRef.runTransaction(new Transaction.Handler() {
             @Override
             public Transaction.Result doTransaction(MutableData mutableData) {
                 // Note: This is very easy to make conflicts with. It may be better to avoid doing
                 // this in a batch or to split up the Task into components.
-                for (Task t : mTodoListTrackers.get(todoList.getKey()).mTasks.values()) {
+                for (Task t : mTodoListTrackers.get(listMetadata.getKey()).mTasks.values()) {
                     Task tCopy = t.copy();
                     tCopy.setDone(true);
                     mutableData.child(t.getKey()).setValue(tCopy);
@@ -105,19 +105,19 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
         });
 
         // Further, update this todo list to set its last updated time.
-        mTodoLists.child(todoList.getKey()).setValue(new TodoList(todoList.getName()));
+        mTodoLists.child(listMetadata.getKey()).setValue(new ListMetadata(listMetadata.getName()));
     }
 
-    private void setTaskCompletion(TodoList todoList) {
-        TodoListTasksListener tracker = mTodoListTrackers.get(todoList.getKey());
-        tracker.swapTodoList(todoList);
+    private void setTaskCompletion(ListMetadata listMetadata) {
+        TodoListTasksListener tracker = mTodoListTrackers.get(listMetadata.getKey());
+        tracker.swapTodoList(listMetadata);
     }
 
-    private void startWatchTodoListTasks(final TodoList todoList) {
-        final String todoListKey = todoList.getKey();
+    private void startWatchTodoListTasks(final ListMetadata listMetadata) {
+        final String todoListKey = listMetadata.getKey();
 
         Firebase taskRef = getFirebase().child(FirebaseTodoList.TASKS).child(todoListKey);
-        TodoListTasksListener tasksListener = new TodoListTasksListener(todoList);
+        TodoListTasksListener tasksListener = new TodoListTasksListener(listMetadata);
         ChildEventListener l = taskRef.addChildEventListener(
                 new ChildEventListenerAdapter<>(Task.class, tasksListener)
         );
@@ -140,12 +140,12 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
     }
 
     private class TodoListTasksListener implements ListEventListener<Task> {
-        TodoList mTodoList; // The list whose numCompleted and numTasks fields will be updated.
+        ListMetadata mListMetadata; // The list whose numCompleted and numTasks fields will be updated.
         final Map<String, Task> mTasks;
         boolean disabled = false;
 
-        TodoListTasksListener(TodoList todoList) {
-            mTodoList = todoList;
+        TodoListTasksListener(ListMetadata listMetadata) {
+            mListMetadata = listMetadata;
             mTasks = new HashMap<>();
         }
 
@@ -156,14 +156,14 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
             disabled = true;
         }
 
-        public void swapTodoList(TodoList otherList) {
+        public void swapTodoList(ListMetadata otherList) {
             if (disabled) {
                 return;
             }
-            assert mTodoList.getKey() == otherList.getKey();
-            otherList.numCompleted = mTodoList.numCompleted;
-            otherList.numTasks = mTodoList.numTasks;
-            mTodoList = otherList;
+            assert mListMetadata.getKey() == otherList.getKey();
+            otherList.numCompleted = mListMetadata.numCompleted;
+            otherList.numTasks = mListMetadata.numTasks;
+            mListMetadata = otherList;
         }
 
         @Override
@@ -171,13 +171,13 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
             if (disabled) {
                 return;
             }
-            mTodoList.numTasks++;
+            mListMetadata.numTasks++;
             if (item.getDone()) {
-                mTodoList.numCompleted++;
+                mListMetadata.numCompleted++;
             }
             mTasks.put(item.getKey(), item);
 
-            mListener.onItemUpdate(mTodoList);
+            mListener.onItemUpdate(mListMetadata);
         }
 
         @Override
@@ -190,11 +190,11 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
 
             if (oldItem.getDone() != item.getDone()) {
                 if (item.getDone()) {
-                    mTodoList.numCompleted++;
+                    mListMetadata.numCompleted++;
                 } else {
-                    mTodoList.numCompleted--;
+                    mListMetadata.numCompleted--;
                 }
-                mListener.onItemUpdate(mTodoList);
+                mListener.onItemUpdate(mListMetadata);
             }
         }
 
@@ -203,13 +203,13 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
             if (disabled) {
                 return;
             }
-            mTodoList.numTasks--;
+            mListMetadata.numTasks--;
             Task t = mTasks.remove(key);
             if (t.getDone()) {
-                mTodoList.numCompleted--;
+                mListMetadata.numCompleted--;
             }
 
-            mListener.onItemUpdate(mTodoList);
+            mListener.onItemUpdate(mListMetadata);
         }
     }
 }

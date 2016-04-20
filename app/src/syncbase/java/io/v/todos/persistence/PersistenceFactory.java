@@ -6,7 +6,7 @@ package io.v.todos.persistence;
 
 import android.content.Context;
 
-import io.v.todos.model.TodoList;
+import io.v.todos.model.ListMetadata;
 
 public final class PersistenceFactory {
     private PersistenceFactory(){}
@@ -17,7 +17,7 @@ public final class PersistenceFactory {
      * @param context an Android context, usually from an Android activity or application
      */
     public static MainPersistence getMainPersistence(Context context,
-                                                     ListEventListener<TodoList> listener) {
+                                                     ListEventListener<ListMetadata> listener) {
         throw new RuntimeException("Unsupported product flavor.");
     }
 

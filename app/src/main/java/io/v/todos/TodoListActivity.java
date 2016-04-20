@@ -19,8 +19,8 @@ import android.widget.EditText;
 import android.widget.Toolbar;
 
 import io.v.todos.model.DataList;
+import io.v.todos.model.ListMetadata;
 import io.v.todos.model.Task;
-import io.v.todos.model.TodoList;
 import io.v.todos.persistence.PersistenceFactory;
 import io.v.todos.persistence.TodoListListener;
 import io.v.todos.persistence.TodoListPersistence;
@@ -40,7 +40,7 @@ import io.v.todos.persistence.TodoListPersistence;
 public class TodoListActivity extends Activity {
     private TodoListPersistence mPersistence;
 
-    private TodoList snackoo;
+    private ListMetadata snackoo;
     private DataList<Task> snackoosList = new DataList<Task>();
     private boolean showDone = false; // TODO(alexfandrianto): Load from shared preferences...
 
@@ -91,7 +91,7 @@ public class TodoListActivity extends Activity {
         mPersistence = PersistenceFactory.getTodoListPersistence(this, snackooKey,
                 new TodoListListener() {
             @Override
-            public void onUpdate(TodoList value) {
+            public void onUpdate(ListMetadata value) {
                 snackoo = value;
                 getActionBar().setTitle(snackoo.getName());
             }
@@ -222,7 +222,7 @@ public class TodoListActivity extends Activity {
 
 
     public void updateTodoList(String todo) {
-        mPersistence.updateTodoList(new TodoList(todo));
+        mPersistence.updateTodoList(new ListMetadata(todo));
     }
 
     public void deleteTodoList() {
