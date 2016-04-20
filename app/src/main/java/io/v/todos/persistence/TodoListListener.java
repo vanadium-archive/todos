@@ -4,8 +4,8 @@
 
 package io.v.todos.persistence;
 
-import io.v.todos.Task;
-import io.v.todos.TodoList;
+import io.v.todos.model.Task;
+import io.v.todos.model.TodoList;
 
 public interface TodoListListener extends ListEventListener<Task> {
     void onUpdate(TodoList value);

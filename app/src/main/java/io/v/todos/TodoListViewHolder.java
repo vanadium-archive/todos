@@ -7,6 +7,8 @@ package io.v.todos;
 import android.view.View;
 import android.widget.TextView;
 
+import io.v.todos.model.TodoList;
+
 /**
  * @author alexfandrianto
  */

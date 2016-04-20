@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package io.v.todos;
+package io.v.todos.model;
 
 import java.util.ArrayList;
 import java.util.Collections;

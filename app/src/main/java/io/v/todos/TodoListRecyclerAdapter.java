@@ -11,6 +11,8 @@ import android.view.ViewGroup;
 
 import java.util.ArrayList;
 
+import io.v.todos.model.TodoList;
+
 /**
  * @author alexfandrianto
  */

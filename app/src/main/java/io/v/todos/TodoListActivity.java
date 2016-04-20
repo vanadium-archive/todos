@@ -18,6 +18,9 @@ import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.Toolbar;
 
+import io.v.todos.model.DataList;
+import io.v.todos.model.Task;
+import io.v.todos.model.TodoList;
 import io.v.todos.persistence.PersistenceFactory;
 import io.v.todos.persistence.TodoListListener;
 import io.v.todos.persistence.TodoListPersistence;

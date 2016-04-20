@@ -6,7 +6,7 @@ package io.v.todos.persistence;
 
 import android.content.Context;
 
-import io.v.todos.TodoList;
+import io.v.todos.model.TodoList;
 
 public final class PersistenceFactory {
     private PersistenceFactory(){}

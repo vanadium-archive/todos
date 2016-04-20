@@ -4,7 +4,7 @@
 
 package io.v.todos.persistence;
 
-import io.v.todos.TodoList;
+import io.v.todos.model.TodoList;
 
 public interface MainPersistence extends Persistence {
     void addTodoList(TodoList todoList);

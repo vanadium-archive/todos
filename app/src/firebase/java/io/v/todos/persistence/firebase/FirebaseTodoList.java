@@ -12,8 +12,8 @@ import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
 import com.firebase.client.ValueEventListener;
 
-import io.v.todos.Task;
-import io.v.todos.TodoList;
+import io.v.todos.model.Task;
+import io.v.todos.model.TodoList;
 import io.v.todos.persistence.TodoListListener;
 import io.v.todos.persistence.TodoListPersistence;
 

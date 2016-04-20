@@ -8,7 +8,7 @@ import com.firebase.client.ChildEventListener;
 import com.firebase.client.DataSnapshot;
 import com.firebase.client.FirebaseError;
 
-import io.v.todos.KeyedData;
+import io.v.todos.model.KeyedData;
 import io.v.todos.persistence.ListEventListener;
 
 public class ChildEventListenerAdapter<T extends KeyedData> implements ChildEventListener {

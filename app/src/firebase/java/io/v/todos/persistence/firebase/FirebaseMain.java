@@ -16,8 +16,8 @@ import com.firebase.client.Transaction;
 import java.util.HashMap;
 import java.util.Map;
 
-import io.v.todos.Task;
-import io.v.todos.TodoList;
+import io.v.todos.model.Task;
+import io.v.todos.model.TodoList;
 import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.MainPersistence;
 

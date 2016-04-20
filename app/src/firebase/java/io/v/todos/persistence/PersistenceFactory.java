@@ -6,7 +6,7 @@ package io.v.todos.persistence;
 
 import android.content.Context;
 
-import io.v.todos.TodoList;
+import io.v.todos.model.TodoList;
 import io.v.todos.persistence.firebase.FirebaseMain;
 import io.v.todos.persistence.firebase.FirebaseTodoList;
 

@@ -8,6 +8,8 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import io.v.todos.model.Task;
+
 /**
  * @author alexfandrianto
  */
