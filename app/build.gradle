@@ -8,6 +8,7 @@ android {
     defaultConfig {
         applicationId "io.v.todos"
         minSdkVersion 21
+        multiDexEnabled true
         targetSdkVersion 23
         versionCode 1
         versionName "1.0"
@@ -22,7 +23,6 @@ android {
     }
     buildTypes {
         release {
-            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
@@ -45,5 +45,9 @@ dependencies {
             'com.android.support:cardview-v7:23.1.1',
             'com.android.support:recyclerview-v7:23.1.1'
     )
-    firebaseCompile 'com.firebase:firebase-client-android:2.5.2'
+    firebaseCompile(
+            'com.firebase:firebase-client-android:2.5.2',
+            'com.google.guava:guava:19.0'
+    )
+    syncbaseCompile 'io.v:vanadium-android:2.0'
 }

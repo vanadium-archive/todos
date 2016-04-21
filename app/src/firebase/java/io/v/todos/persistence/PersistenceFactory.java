@@ -4,7 +4,7 @@
 
 package io.v.todos.persistence;
 
-import android.content.Context;
+import android.app.Activity;
 
 import io.v.todos.model.ListMetadata;
 import io.v.todos.persistence.firebase.FirebaseMain;
@@ -14,22 +14,35 @@ public final class PersistenceFactory {
     private PersistenceFactory(){}
 
     /**
-     * Instantiates a persistence object that can be used to manipulate todo lists.
-     *
-     * @param context an Android context, usually from an Android activity or application
+     * Indicates whether {@link #getMainPersistence(Activity, ListEventListener)} may block. This
+     * can affect whether a progress indicator is shown and whether a worker thread is used.
      */
-    public static MainPersistence getMainPersistence(Context context,
+    public static boolean mightGetMainPersistenceBlock() {
+        return false;
+    }
+
+    /**
+     * Instantiates a persistence object that can be used to manipulate todo lists.
+     */
+    public static MainPersistence getMainPersistence(Activity activity,
                                                      ListEventListener<ListMetadata> listener) {
-        return new FirebaseMain(context, listener);
+        return new FirebaseMain(activity, listener);
+    }
+
+    /**
+     * Indicates whether {@link #getTodoListPersistence(Activity, String, TodoListListener)} may
+     * block. This can affect whether a progress indicator is shown and whether a worker thread is
+     * used.
+     */
+    public static boolean mightGetTodoListPersistenceBlock() {
+        return false;
     }
 
     /**
      * Instantiates a persistence object that can be used to manipulate a todo list.
-     *
-     * @param context an Android context, usually from an Android activity or application
      */
-    public static TodoListPersistence getTodoListPersistence(Context context, String key,
+    public static TodoListPersistence getTodoListPersistence(Activity activity, String key,
                                                              TodoListListener listener) {
-        return new FirebaseTodoList(context, key, listener);
+        return new FirebaseTodoList(activity, key, listener);
     }
 }

@@ -38,7 +38,7 @@ public class TodoListActivity extends Activity {
     private TodoListPersistence mPersistence;
 
     private ListSpec snackoo;
-    private DataList<Task> snackoosList = new DataList<Task>();
+    private DataList<Task> snackoosList = new DataList<>();
 
     // This adapter handle mirrors the firebase list values and generates the corresponding todo
     // item View children for a list view.
@@ -50,7 +50,10 @@ public class TodoListActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        mPersistence.close();
+        if (mPersistence != null) {
+            mPersistence.close();
+            mPersistence = null;
+        }
         super.onDestroy();
     }
 
@@ -59,7 +62,7 @@ public class TodoListActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         Intent intent = getIntent();
-        String snackooKey = intent.getStringExtra(MainActivity.INTENT_SNACKOO_KEY);
+        final String snackooKey = intent.getStringExtra(MainActivity.INTENT_SNACKOO_KEY);
 
         Toolbar toolbar = (Toolbar)findViewById(R.id.toolbar);
         setActionBar(toolbar);
@@ -89,61 +92,70 @@ public class TodoListActivity extends Activity {
             }
         }).attachToRecyclerView(recyclerView);
 
-        mPersistence = PersistenceFactory.getTodoListPersistence(this, snackooKey,
-                new TodoListListener() {
+        new PersistenceInitializer<TodoListPersistence>(this) {
             @Override
-            public void onUpdate(ListSpec value) {
-                snackoo = value;
-                getActionBar().setTitle(snackoo.getName());
+            protected TodoListPersistence initPersistence() throws Exception {
+                return PersistenceFactory.getTodoListPersistence(mActivity, snackooKey,
+                        new TodoListListener() {
+                            @Override
+                            public void onUpdate(ListSpec value) {
+                                snackoo = value;
+                                getActionBar().setTitle(snackoo.getName());
+                            }
+
+                            @Override
+                            public void onDelete() {
+                                finish();
+                            }
+
+                            @Override
+                            public void onUpdateShowDone(boolean showDone) {
+                                mShowDone = showDone;
+                                if (mShowDoneMenuItem != null) {
+                                    // Only interact with mShowDoneMenu if it has been inflated.
+                                    mShowDoneMenuItem.setChecked(showDone);
+                                }
+
+                                int oldSize = adapter.getItemCount();
+                                adapter.setShowDone(showDone);
+                                int newSize = adapter.getItemCount();
+                                if (newSize > oldSize) {
+                                    adapter.notifyItemRangeInserted(oldSize, newSize - oldSize);
+                                } else {
+                                    adapter.notifyItemRangeRemoved(newSize, oldSize - newSize);
+                                }
+                                setEmptyVisiblity();
+                            }
+
+                            @Override
+                            public void onItemAdd(Task item) {
+                                int position = snackoosList.insertInOrder(item);
+                                adapter.notifyItemInserted(position);
+                                setEmptyVisiblity();
+                            }
+
+                            @Override
+                            public void onItemUpdate(Task item) {
+                                int start = snackoosList.findIndexByKey(item.key);
+                                int end = snackoosList.updateInOrder(item);
+                                adapter.notifyItemMoved(start, end);
+                                adapter.notifyItemChanged(end);
+                                setEmptyVisiblity();
+                            }
+
+                            @Override
+                            public void onItemDelete(String key) {
+                                int position = snackoosList.removeByKey(key);
+                                adapter.notifyItemRemoved(position);
+                                setEmptyVisiblity();
+                            }
+                        });
             }
 
-            @Override
-            public void onDelete() {
-                finish();
+            protected void onSuccess(TodoListPersistence persistence) {
+                mPersistence = persistence;
             }
-
-            @Override
-            public void onUpdateShowDone(boolean showDone) {
-                mShowDone = showDone;
-                if (mShowDoneMenuItem != null) {
-                    // Only interact with mShowDoneMenu if it has been inflated.
-                    mShowDoneMenuItem.setChecked(showDone);
-                }
-
-                int oldSize = adapter.getItemCount();
-                adapter.setShowDone(showDone);
-                int newSize = adapter.getItemCount();
-                if (newSize > oldSize) {
-                    adapter.notifyItemRangeInserted(oldSize, newSize - oldSize);
-                } else {
-                    adapter.notifyItemRangeRemoved(newSize, oldSize - newSize);
-                }
-                setEmptyVisiblity();
-            }
-
-            @Override
-            public void onItemAdd(Task item) {
-                int position = snackoosList.insertInOrder(item);
-                adapter.notifyItemInserted(position);
-                setEmptyVisiblity();
-            }
-
-            @Override
-            public void onItemUpdate(Task item) {
-                int start = snackoosList.findIndexByKey(item.key);
-                int end = snackoosList.updateInOrder(item);
-                adapter.notifyItemMoved(start, end);
-                adapter.notifyItemChanged(end);
-                setEmptyVisiblity();
-            }
-
-            @Override
-            public void onItemDelete(String key) {
-                int position = snackoosList.removeByKey(key);
-                adapter.notifyItemRemoved(position);
-                setEmptyVisiblity();
-            }
-        });
+        }.execute(PersistenceFactory.mightGetTodoListPersistenceBlock());
     }
 
     // Set the visibility based on what the adapter thinks is the visible item count.

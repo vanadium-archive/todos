@@ -32,6 +32,8 @@ import io.v.todos.persistence.PersistenceFactory;
  * @author alexfandrianto
  */
 public class MainActivity extends Activity {
+    private static final String TAG = "MainActivity";
+
     private MainPersistence mPersistence;
 
     // Snackoos are the code name for the list of todos.
@@ -46,7 +48,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        mPersistence.close();
+        if (mPersistence != null) {
+            mPersistence.close();
+            mPersistence = null;
+        }
         super.onDestroy();
     }
 
@@ -98,33 +103,43 @@ public class MainActivity extends Activity {
             }
         }).attachToRecyclerView(recyclerView);
 
-        mPersistence = PersistenceFactory.getMainPersistence(this,
-                new ListEventListener<ListMetadata>() {
+        new PersistenceInitializer<MainPersistence>(this) {
             @Override
-            public void onItemAdd(ListMetadata item) {
-                int position = snackoosList.insertInOrder(item);
+            protected MainPersistence initPersistence() throws Exception {
+                return PersistenceFactory.getMainPersistence(mActivity,
+                        new ListEventListener<ListMetadata>() {
+                            @Override
+                            public void onItemAdd(ListMetadata item) {
+                                int position = snackoosList.insertInOrder(item);
 
-                adapter.notifyItemInserted(position);
-                setEmptyVisiblity();
+                                adapter.notifyItemInserted(position);
+                                setEmptyVisiblity();
+                            }
+
+                            @Override
+                            public void onItemUpdate(ListMetadata item) {
+                                int start = snackoosList.findIndexByKey(item.key);
+                                int end = snackoosList.updateInOrder(item);
+
+                                adapter.notifyItemMoved(start, end);
+                                adapter.notifyItemChanged(end);
+                            }
+
+                            @Override
+                            public void onItemDelete(String key) {
+                                int position = snackoosList.removeByKey(key);
+
+                                adapter.notifyItemRemoved(position);
+                                setEmptyVisiblity();
+                            }
+                        });
             }
 
             @Override
-            public void onItemUpdate(ListMetadata item) {
-                int start = snackoosList.findIndexByKey(item.key);
-                int end = snackoosList.updateInOrder(item);
-
-                adapter.notifyItemMoved(start, end);
-                adapter.notifyItemChanged(end);
+            protected void onSuccess(MainPersistence persistence) {
+                mPersistence = persistence;
             }
-
-            @Override
-            public void onItemDelete(String key) {
-                int position = snackoosList.removeByKey(key);
-
-                adapter.notifyItemRemoved(position);
-                setEmptyVisiblity();
-            }
-        });
+        }.execute(PersistenceFactory.mightGetMainPersistenceBlock());
     }
 
     // Set the visibility based on what the adapter thinks is the visible item count.
