@@ -10,4 +10,5 @@ import io.v.todos.model.Task;
 public interface TodoListListener extends ListEventListener<Task> {
     void onUpdate(ListSpec value);
     void onDelete();
+    void onUpdateShowDone(boolean showDone);
 }

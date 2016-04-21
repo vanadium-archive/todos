@@ -11,7 +11,6 @@
         android:id="@+id/show_done"
         android:orderInCategory="101"
         android:checkable="true"
-        android:checked="true"
         android:title="@string/show_done" />
     <item
         android:id="@+id/action_edit"

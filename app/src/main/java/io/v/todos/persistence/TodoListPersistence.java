@@ -14,4 +14,5 @@ public interface TodoListPersistence extends Persistence {
     void addTask(TaskSpec task);
     void updateTask(Task task);
     void deleteTask(String key);
+    void setShowDone(boolean showDone);
 }

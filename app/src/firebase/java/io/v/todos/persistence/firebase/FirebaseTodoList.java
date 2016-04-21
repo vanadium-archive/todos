@@ -5,6 +5,8 @@
 package io.v.todos.persistence.firebase;
 
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
 
 import com.firebase.client.ChildEventListener;
 import com.firebase.client.DataSnapshot;
@@ -20,10 +22,12 @@ import io.v.todos.persistence.TodoListPersistence;
 
 public class FirebaseTodoList extends FirebasePersistence implements TodoListPersistence {
     public static final String TASKS = "snackoo lists (Task)";
+    private static final String SHOW_DONE_KEY = "ShowDone";
 
     private final Firebase mTodoList, mTasks;
     private final ValueEventListener mTodoListListener;
     private final ChildEventListener mTasksListener;
+    private final SharedPreferences mSharedPreferences;
 
     private ListSpec mListSpec;
 
@@ -33,6 +37,7 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
         mTodoList = getFirebase().child(FirebaseMain.TODO_LISTS).child(todoListKey);
         mTasks = getFirebase().child(TASKS).child(todoListKey);
 
+        // Listen and forward changes to the ListSpec metadata.
         mTodoListListener = mTodoList.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
@@ -50,7 +55,23 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
             }
         });
 
+        // Listen and forward changes to task items in this list.
         mTasksListener = mTasks.addChildEventListener(new TaskChildEventListener(listener));
+
+        // Listen and forward changes to the show done toggle.
+        // TODO(alexfandrianto): This setting is currently shared across all todo lists, but it is
+        // also valid to make the setting apply to a specific todo list. We have not decided yet.
+        mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
+        listener.onUpdateShowDone(mSharedPreferences.getBoolean(SHOW_DONE_KEY, true));
+        mSharedPreferences.registerOnSharedPreferenceChangeListener(
+                new SharedPreferences.OnSharedPreferenceChangeListener() {
+            @Override
+            public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
+                if (s.equals(SHOW_DONE_KEY)) {
+                    listener.onUpdateShowDone(sharedPreferences.getBoolean(s, true));
+                }
+            }
+        });
     }
 
     @Override
@@ -84,6 +105,13 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
     public void deleteTask(String key) {
         mTasks.child(key).removeValue();
         updateListTimestamp();
+    }
+
+    @Override
+    public void setShowDone(boolean showDone) {
+        SharedPreferences.Editor editor = mSharedPreferences.edit();
+        editor.putBoolean(SHOW_DONE_KEY, showDone);
+        editor.apply();
     }
 
     @Override

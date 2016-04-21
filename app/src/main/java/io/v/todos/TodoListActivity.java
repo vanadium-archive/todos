@@ -43,11 +43,14 @@ public class TodoListActivity extends Activity {
 
     private ListSpec snackoo;
     private DataList<Task> snackoosList = new DataList<Task>();
-    private boolean showDone = false; // TODO(alexfandrianto): Load from shared preferences...
 
     // This adapter handle mirrors the firebase list values and generates the corresponding todo
     // item View children for a list view.
     private TaskRecyclerAdapter adapter;
+
+    // The menu item that toggles whether done items are shown or not.
+    private MenuItem mShowDoneMenuItem;
+    private boolean mShowDone; // mirrors the checked status of mShowDoneMenuItem
 
     @Override
     protected void onDestroy() {
@@ -100,6 +103,25 @@ public class TodoListActivity extends Activity {
             @Override
             public void onDelete() {
                 finish();
+            }
+
+            @Override
+            public void onUpdateShowDone(boolean showDone) {
+                mShowDone = showDone;
+                if (mShowDoneMenuItem != null) {
+                    // Only interact with mShowDoneMenu if it has been inflated.
+                    mShowDoneMenuItem.setChecked(showDone);
+                }
+
+                int oldSize = adapter.getItemCount();
+                adapter.setShowDone(showDone);
+                int newSize = adapter.getItemCount();
+                if (newSize > oldSize) {
+                    adapter.notifyItemRangeInserted(oldSize, newSize - oldSize);
+                } else {
+                    adapter.notifyItemRangeRemoved(newSize, oldSize - newSize);
+                }
+                setEmptyVisiblity();
             }
 
             @Override
@@ -232,6 +254,13 @@ public class TodoListActivity extends Activity {
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_task, menu);
+
+        // Also, obtain the reference to the show done menu item.
+        mShowDoneMenuItem = menu.findItem(R.id.show_done);
+
+        // Since the menu item may be inflated too late, set checked to mShowDone.
+        mShowDoneMenuItem.setChecked(mShowDone);
+
         return true;
     }
 
@@ -244,19 +273,7 @@ public class TodoListActivity extends Activity {
 
         switch (id) {
             case R.id.show_done:
-                if(item.isChecked()){
-                    item.setChecked(false);
-                    adapter.setShowDone(false);
-                }else{
-                    item.setChecked(true);
-                    adapter.setShowDone(true);
-                }
-                adapter.notifyDataSetChanged();
-
-                // TODO(alexfandrianto): You may wish to save this data into SharedPreferences.
-                // You may also wish to save this to a different part of the space which is synced
-                // across your devices.
-
+                mPersistence.setShowDone(!item.isChecked());
                 return true;
             case R.id.action_settings:
                 return true;
