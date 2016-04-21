@@ -3,9 +3,16 @@
 buildscript {
     repositories {
         jcenter()
+        maven { url "https://jitpack.io" }
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:2.0.0'
+
+        // Use the Android SDK manager, which will automatically download
+        // the required Android SDK.
+        // Note: Using jitpack and the master branch of the sdk-manager-plugin in order to be
+        // compatible with gradle 2.0.0. https://github.com/JakeWharton/sdk-manager-plugin/issues/99
+        classpath 'com.github.JakeWharton:sdk-manager-plugin:master'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
