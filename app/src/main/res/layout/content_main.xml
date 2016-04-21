@@ -36,5 +36,5 @@
         android:src="@android:drawable/ic_input_add"
         android:layout_margin="@dimen/fab_margin"
         android:clickable="true"
-        android:onClick="addCallback"/>
+        android:onClick="initiateItemAdd"/>
 </RelativeLayout>

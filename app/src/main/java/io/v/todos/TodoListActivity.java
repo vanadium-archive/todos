@@ -5,17 +5,13 @@
 package io.v.todos;
 
 import android.app.Activity;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.WindowManager;
-import android.widget.EditText;
 import android.widget.Toolbar;
 
 import io.v.todos.model.DataList;
@@ -84,10 +80,11 @@ public class TodoListActivity extends Activity {
         new ItemTouchHelper(new SwipeableTouchHelperCallback() {
             @Override
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
+                String fbKey = (String)viewHolder.itemView.getTag();
                 if (direction == ItemTouchHelper.RIGHT) {
-                    markAsDone((String)viewHolder.itemView.getTag());
+                    mPersistence.updateTask(snackoosList.findByKey(fbKey).withToggleDone());
                 } else if (direction == ItemTouchHelper.LEFT) {
-                    deleteTodoItem((String)viewHolder.itemView.getTag());
+                    mPersistence.deleteTask(fbKey);
                 }
             }
         }).attachToRecyclerView(recyclerView);
@@ -155,99 +152,44 @@ public class TodoListActivity extends Activity {
         v.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 
-    public void addTodoItem(String todo) {
-        mPersistence.addTask(new TaskSpec(todo));
-    }
-
-    public void updateTodoItem(String fbKey, String todo) {
-        mPersistence.updateTask(snackoosList.findByKey(fbKey).withText(todo));
-    }
-    public void markAsDone(String fbKey) {
-        mPersistence.updateTask(snackoosList.findByKey(fbKey).withToggleDone());
-    }
-
-    public void deleteTodoItem(String fbKey) {
-        mPersistence.deleteTask(fbKey);
-    }
-
-    public void addCallback(View view) {
-        final EditText todoItem = new EditText(this);
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("New Todo")
-                .setView(todoItem)
-                .setPositiveButton("Add", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        addTodoItem(todoItem.getText().toString());
-                    }
-                })
-                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                    }
-                }).show();
-        dialog.getWindow().setSoftInputMode(
-                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+    public void initiateItemAdd(View view) {
+        UIUtil.showAddDialog(this, "New Task", new UIUtil.DialogResponseListener() {
+            @Override
+            public void handleResponse(String response) {
+                mPersistence.addTask(new TaskSpec(response));
+            }
+        });
     }
 
     private void initiateTaskEdit(final String fbKey) {
-        final EditText todoItem = new EditText(this);
-        todoItem.setText(snackoosList.findByKey(fbKey).text);
+        UIUtil.showEditDialog(this, "Editing Task", snackoosList.findByKey(fbKey).text,
+                new UIUtil.DialogResponseListener() {
+            @Override
+            public void handleResponse(String response) {
+                mPersistence.updateTask(snackoosList.findByKey(fbKey).withText(response));
+            }
 
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Editing Task")
-                .setView(todoItem)
-                .setPositiveButton("Save", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        updateTodoItem(fbKey, todoItem.getText().toString());
-                    }
-                })
-                .setNeutralButton("Delete", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        deleteTodoItem(fbKey);
-                    }
-                })
-                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                    }
-                }).show();
-        dialog.getWindow().setSoftInputMode(
-                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+            @Override
+            public void handleDelete() {
+                mPersistence.deleteTask(fbKey);
+            }
+        });
     }
 
     private void initiateTodoListEdit() {
-        final EditText todoItem = new EditText(this);
-        todoItem.setText(snackoo.getName());
+        UIUtil.showEditDialog(this, "Editing Todo List", snackoo.getName(),
+                new UIUtil.DialogResponseListener() {
+            @Override
+            public void handleResponse(String response) {
+                mPersistence.updateTodoList(new ListSpec(response));
+            }
 
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Editing Todo List")
-                .setView(todoItem)
-                .setPositiveButton("Save", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        updateTodoList(todoItem.getText().toString());
-                    }
-                })
-                .setNeutralButton("Delete", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        deleteTodoList();
-                    }
-                })
-                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                    }
-                }).show();
-        dialog.getWindow().setSoftInputMode(
-                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+            @Override
+            public void handleDelete() {
+                mPersistence.deleteTodoList();
+            }
+        });
     }
-
-
-    public void updateTodoList(String name) {
-        mPersistence.updateTodoList(new ListSpec(name));
-    }
-
-    public void deleteTodoList() {
-        mPersistence.deleteTodoList();
-    }
-
 
     // The following methods are boilerplate for handling the Menu in the top right corner.
     @Override

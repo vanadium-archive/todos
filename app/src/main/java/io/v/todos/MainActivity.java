@@ -5,17 +5,13 @@
 package io.v.todos;
 
 import android.app.Activity;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.WindowManager;
-import android.widget.EditText;
 import android.widget.Toolbar;
 
 import io.v.todos.model.DataList;
@@ -102,7 +98,8 @@ public class MainActivity extends Activity {
             }
         }).attachToRecyclerView(recyclerView);
 
-        mPersistence = PersistenceFactory.getMainPersistence(this, new ListEventListener<ListMetadata>() {
+        mPersistence = PersistenceFactory.getMainPersistence(this,
+                new ListEventListener<ListMetadata>() {
             @Override
             public void onItemAdd(ListMetadata item) {
                 int position = snackoosList.insertInOrder(item);
@@ -136,23 +133,13 @@ public class MainActivity extends Activity {
         v.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 
-    public void addCallback(View view) {
-        final EditText todoItem = new EditText(this);
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("New Todo")
-                .setView(todoItem)
-                .setPositiveButton("Add", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        mPersistence.addTodoList(new ListSpec(todoItem.getText().toString()));
-                    }
-                })
-                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                    }
-                }).show();
-        dialog.getWindow().setSoftInputMode(
-                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+    public void initiateItemAdd(View view) {
+        UIUtil.showAddDialog(this, "New Todo List", new UIUtil.DialogResponseListener() {
+            @Override
+            public void handleResponse(String response) {
+                mPersistence.addTodoList(new ListSpec(response));
+            }
+        });
     }
 
     // The following methods are boilerplate for handling the Menu in the top right corner.
