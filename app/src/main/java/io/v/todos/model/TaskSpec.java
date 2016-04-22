@@ -4,12 +4,14 @@
 
 package io.v.todos.model;
 
+import java.io.Serializable;
+
 /**
  * POJO of persisted information regarding a particular task.
  *
  * @author alexfandrianto
  */
-public class TaskSpec {
+public class TaskSpec implements Serializable {
     private String mText;
     private long mAddedAt;
     private boolean mDone;

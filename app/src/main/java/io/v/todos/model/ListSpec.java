@@ -4,10 +4,12 @@
 
 package io.v.todos.model;
 
+import java.io.Serializable;
+
 /**
  * POJO of persisted information regarding a particular todo list.
  */
-public class ListSpec {
+public class ListSpec implements Serializable {
     private String mName;
     private long mUpdatedAt;
 

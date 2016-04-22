@@ -6,6 +6,8 @@ package io.v.todos.model;
 
 import android.support.annotation.NonNull;
 
+import java.util.Date;
+
 /**
  * Tracks information regarding a particular todo list.
  */
@@ -68,5 +70,11 @@ public class ListMetadata extends KeyedData<ListMetadata> {
 
     public ListSpec toSpec() {
         return new ListSpec(name, updatedAt);
+    }
+
+    @Override
+    public String toString() {
+        return key + ": " + name + " (" + numCompleted + "/" + numTasks + "), last updated " +
+                new Date(updatedAt);
     }
 }
