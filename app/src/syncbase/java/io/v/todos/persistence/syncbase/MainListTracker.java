@@ -85,7 +85,7 @@ public class MainListTracker {
     private void processWatchChange(WatchChange change) {
         String rowName = change.getRowName();
 
-        if (rowName.equals(SyncbaseTodoList.LIST_ROW_NAME)) {
+        if (rowName.equals(SyncbaseTodoList.LIST_METADATA_ROW_NAME)) {
             mListSpec = SyncbasePersistence.castWatchValue(change.getValue(), ListSpec.class);
         } else if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
             if (mIsTaskCompleted.remove(rowName)) {

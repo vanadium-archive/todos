@@ -45,6 +45,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
             TAG = SyncbaseMain.class.getSimpleName(),
             LISTS_PREFIX = "lists_";
 
+    private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.COLLECTION_ID, true);
     private final Map<String, MainListTracker> mTaskTrackers = new HashMap<>();
 
     /**
@@ -64,6 +65,8 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                 if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
                     trap(mTaskTrackers.remove(listId).deleteList(mVContext));
                 } else {
+                    mIdGenerator.registerId(change.getRowName().substring(LISTS_PREFIX.length()));
+
                     MainListTracker listTracker = new MainListTracker(
                             mVContext, getDatabase(), listId, listener);
                     if (mTaskTrackers.put(listId, listTracker) != null) {
@@ -82,7 +85,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
     @Override
     public void addTodoList(final ListSpec listSpec) {
-        final String listName = LISTS_PREFIX + randomName();
+        final String listName = LISTS_PREFIX + mIdGenerator.generateTailId();
         final Collection listCollection = getDatabase().getCollection(mVContext, listName);
         Futures.addCallback(listCollection.create(mVContext, null),
                 new TrappingCallback<Void>(mActivity) {
@@ -90,8 +93,8 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                     public void onSuccess(@Nullable Void result) {
                         // These can happen in either order
                         trap(getUserCollection().put(mVContext, listName, null, VdlAny.class));
-                        trap(listCollection.put(mVContext, SyncbaseTodoList.LIST_ROW_NAME, listSpec,
-                                ListSpec.class));
+                        trap(listCollection.put(mVContext, SyncbaseTodoList.LIST_METADATA_ROW_NAME,
+                                listSpec, ListSpec.class));
                     }
                 });
     }

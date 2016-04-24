@@ -32,7 +32,7 @@ import io.v.v23.verror.VException;
 
 public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPersistence {
     public static final String
-            LIST_ROW_NAME = "list",
+            LIST_METADATA_ROW_NAME = "list",
             TASKS_PREFIX = "tasks_";
 
     private static final String
@@ -40,6 +40,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
 
     private final Collection mList;
     private final TodoListListener mListener;
+    private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.ROW_NAME, true);
     private final Set<String> mTaskIds = new HashSet<>();
 
     /**
@@ -88,7 +89,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     private void processWatchChange(WatchChange change) {
         String rowName = change.getRowName();
 
-        if (rowName.equals(SyncbaseTodoList.LIST_ROW_NAME)) {
+        if (rowName.equals(SyncbaseTodoList.LIST_METADATA_ROW_NAME)) {
             ListSpec listSpec = SyncbasePersistence.castWatchValue(change.getValue(),
                     ListSpec.class);
             mListener.onUpdate(listSpec);
@@ -96,6 +97,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
             mTaskIds.remove(rowName);
             mListener.onItemDelete(rowName);
         } else {
+            mIdGenerator.registerId(change.getRowName().substring(TASKS_PREFIX.length()));
+
             TaskSpec taskSpec = SyncbasePersistence.castWatchValue(change.getValue(),
                     TaskSpec.class);
             Task task = new Task(rowName, taskSpec);
@@ -110,7 +113,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
 
     @Override
     public void updateTodoList(ListSpec listSpec) {
-        trap(mList.put(mVContext, LIST_ROW_NAME, listSpec, ListSpec.class));
+        trap(mList.put(mVContext, LIST_METADATA_ROW_NAME, listSpec, ListSpec.class));
     }
 
     @Override
@@ -121,13 +124,13 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
 
     public static ListenableFuture<Void> updateListTimestamp(final VContext vContext,
                                                              final Collection list) {
-        ListenableFuture<Object> get = list.get(vContext, LIST_ROW_NAME, ListSpec.class);
-        return Futures.transform(get, new AsyncFunction<Object, Void>() {
+        ListenableFuture<Object> get = list.get(vContext, LIST_METADATA_ROW_NAME, ListSpec.class);
+        return Futures.transformAsync(get, new AsyncFunction<Object, Void>() {
             @Override
             public ListenableFuture<Void> apply(Object oldValue) throws Exception {
                 ListSpec listSpec = (ListSpec) oldValue;
                 listSpec.setUpdatedAt(System.currentTimeMillis());
-                return list.put(vContext, LIST_ROW_NAME, listSpec, ListSpec.class);
+                return list.put(vContext, LIST_METADATA_ROW_NAME, listSpec, ListSpec.class);
             }
         });
     }
@@ -138,7 +141,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
 
     @Override
     public void addTask(TaskSpec task) {
-        trap(mList.put(mVContext, TASKS_PREFIX + randomName(), task, TaskSpec.class));
+        trap(mList.put(mVContext, TASKS_PREFIX + mIdGenerator.generateTailId(), task,
+                TaskSpec.class));
         updateListTimestamp();
     }
 

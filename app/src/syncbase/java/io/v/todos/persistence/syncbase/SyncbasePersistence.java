@@ -24,7 +24,6 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 
 import java.io.File;
-import java.util.UUID;
 import java.util.concurrent.Executors;
 
 import javax.annotation.Nullable;
@@ -184,10 +183,6 @@ public class SyncbasePersistence implements Persistence {
 
     public static boolean isInitialized() {
         return sUserCollection != null;
-    }
-
-    protected static String randomName() {
-        return UUID.randomUUID().toString().replace('-', '_');
     }
 
     /**
