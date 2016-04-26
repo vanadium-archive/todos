@@ -33,19 +33,18 @@ import io.v.todos.persistence.PersistenceFactory;
  * @author alexfandrianto
  */
 public class MainActivity extends Activity {
-    private static final String TAG = "MainActivity";
-
     private MainPersistence mPersistence;
 
     // Snackoos are the code name for the list of todos.
     // These todos are backed up at the SNACKOOS child of the Firebase URL.
-    // We use the snackoosList to track a custom sorted list of the stored values.
+    // We use mMainList to track a custom sorted list of the stored values.
     static final String INTENT_SNACKOO_KEY = "snackoo key";
-    private DataList<ListMetadata> snackoosList = new DataList<>();
+    private DataList<ListMetadata> mMainList = new DataList<>();
 
     // This adapter handle mirrors the firebase list values and generates the corresponding todo
     // item View children for a list view.
-    private TodoListRecyclerAdapter adapter;
+    private TodoListRecyclerAdapter mAdapter;
+    private RecyclerView mRecyclerView;
 
     @Override
     protected void onDestroy() {
@@ -65,7 +64,7 @@ public class MainActivity extends Activity {
         getActionBar().setTitle(R.string.app_name);
 
         // Set up the todo list adapter
-        adapter = new TodoListRecyclerAdapter(snackoosList, new View.OnClickListener() {
+        mAdapter = new TodoListRecyclerAdapter(mMainList, new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 String fbKey = (String)view.getTag();
@@ -76,39 +75,36 @@ public class MainActivity extends Activity {
             }
         });
 
-        RecyclerView recyclerView = (RecyclerView)findViewById(R.id.recycler);
-        recyclerView.setAdapter(adapter);
+        mRecyclerView = (RecyclerView)findViewById(R.id.recycler);
+        mRecyclerView.setAdapter(mAdapter);
 
         new ItemTouchHelper(new SwipeableTouchHelperCallback() {
             @Override
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
                 String todoListKey = (String)viewHolder.itemView.getTag();
                 if (direction == ItemTouchHelper.RIGHT) {
-                    int position = snackoosList.findIndexByKey(todoListKey);
+                    int position = mMainList.findIndexByKey(todoListKey);
                     if (position == -1) {
                         return;
                     }
-                    ListMetadata l = snackoosList.get(position);
+                    ListMetadata l = mMainList.get(position);
                     if (l.canCompleteAll()) {
-                        mPersistence.completeAllTasks(l);
+                        mPersistence.setCompletion(l, true);
+                    } else if (l.numTasks > 0) {
+                        mPersistence.setCompletion(l, false);
+                    } else {
+                        mAdapter.notifyItemChanged(position);
                     }
-                    // TODO(alexfandrianto): Can we remove this? The bug when we don't have it
-                    // here is that the swiped card doesn't return from being swiped to the right
-                    // whether or not is it marking tasks as done or not.
-                    // Doing this causes a little bit of flicker when marking all tasks as done and
-                    // appears natural in the no-op case.
-                    adapter.notifyItemChanged(position);
                 } else if (direction == ItemTouchHelper.LEFT) {
                     mPersistence.deleteTodoList(todoListKey);
                 }
             }
-        }).attachToRecyclerView(recyclerView);
+        }).attachToRecyclerView(mRecyclerView);
 
         new PersistenceInitializer<MainPersistence>(this) {
             @Override
             protected MainPersistence initPersistence() throws Exception {
-                return PersistenceFactory.getMainPersistence(mActivity,
-                        createMainListener());
+                return PersistenceFactory.getMainPersistence(mActivity, createMainListener());
             }
 
             @Override
@@ -123,31 +119,49 @@ public class MainActivity extends Activity {
     @VisibleForTesting
     ListEventListener<ListMetadata> createMainListener() {
         return new ListEventListener<ListMetadata>() {
-            @Override
-            public void onItemAdd(ListMetadata item) {
-                int position = snackoosList.insertInOrder(item);
+                    @Override
+                    public void onItemAdd(ListMetadata item) {
+                        int position = mMainList.insertInOrder(item);
 
-                adapter.notifyItemInserted(position);
-                setEmptyVisiblity();
-            }
+                        mAdapter.notifyItemInserted(position);
+                        setEmptyVisiblity();
+                    }
 
-            @Override
-            public void onItemUpdate(ListMetadata item) {
-                int start = snackoosList.findIndexByKey(item.key);
-                int end = snackoosList.updateInOrder(item);
+                    @Override
+                    public void onItemUpdate(final ListMetadata item) {
+                        int start = mMainList.findIndexByKey(item.key);
+                        int end = mMainList.updateInOrder(item);
 
-                adapter.notifyItemMoved(start, end);
-                adapter.notifyItemChanged(end);
-            }
+                        if (start != end) {
+                            mAdapter.notifyItemMoved(start, end);
+                        }
 
-            @Override
-            public void onItemDelete(String key) {
-                int position = snackoosList.removeByKey(key);
+                        // The change animation involves a cross-fade that, if interrupted
+                        // while another for the same item is already in progress, interacts
+                        // badly with ItemTouchHelper's swipe animator. The effect would be
+                        // a flicker of the intermediate ListMetadata view, then it fading
+                        // out to the latest view but X-translated off the screen due to the
+                        // swipe animator.
+                        //
+                        // We could queue up the next change after the current one, but it's
+                        // probably better just to rebind.
+                        View view = mRecyclerView.getChildAt(end);
+                        if (view.getAlpha() < 1) {
+                            mAdapter.bindViewHolder((TodoListViewHolder) mRecyclerView
+                                    .getChildViewHolder(view), end);
+                        } else {
+                            mAdapter.notifyItemChanged(end);
+                        }
+                    }
 
-                adapter.notifyItemRemoved(position);
-                setEmptyVisiblity();
-            }
-        };
+                    @Override
+                    public void onItemDelete(String key) {
+                        int position = mMainList.removeByKey(key);
+
+                        mAdapter.notifyItemRemoved(position);
+                        setEmptyVisiblity();
+                    }
+                };
     }
 
     // Allow the tests to mock out the main persistence.
@@ -159,7 +173,7 @@ public class MainActivity extends Activity {
     // Set the visibility based on what the adapter thinks is the visible item count.
     private void setEmptyVisiblity() {
         View v = findViewById(R.id.empty);
-        v.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
+        v.setVisibility(mAdapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 
     public void initiateItemAdd(View view) {

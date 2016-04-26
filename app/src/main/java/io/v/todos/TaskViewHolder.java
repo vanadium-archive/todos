@@ -14,8 +14,6 @@ import io.v.todos.model.Task;
  * @author alexfandrianto
  */
 public class TaskViewHolder extends SwipeableCardViewHolder {
-    private boolean showDone = true;
-
     public TaskViewHolder(View itemView) {
         super(itemView);
     }
@@ -34,15 +32,9 @@ public class TaskViewHolder extends SwipeableCardViewHolder {
 
         itemView.setTag(task.key);
         itemView.setOnClickListener(listener);
-
-        itemView.setVisibility(!showDone && task.done ? View.GONE : View.VISIBLE);
     }
 
     private String computeCreated(Task task) {
         return UIUtil.computeTimeAgo("Created", task.addedAt);
-    }
-
-    public void setShowDone(boolean showDone) {
-        this.showDone = showDone;
     }
 }

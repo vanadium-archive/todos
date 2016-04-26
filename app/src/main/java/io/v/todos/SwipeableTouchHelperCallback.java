@@ -44,6 +44,7 @@ public abstract class SwipeableTouchHelperCallback extends ItemTouchHelper.Simpl
         }
     }
 
+    @Override
     public void onChildDraw(Canvas c, RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder,
                             float dX, float dY, int actionState, boolean isCurrentlyActive) {
         SwipeableCardViewHolder holder = (SwipeableCardViewHolder)viewHolder;
@@ -52,6 +53,7 @@ public abstract class SwipeableTouchHelperCallback extends ItemTouchHelper.Simpl
                 isCurrentlyActive);
     }
 
+    @Override
     public void onChildDrawOver(Canvas c, RecyclerView recyclerView,
                                 RecyclerView.ViewHolder viewHolder, float dX, float dY,
                                 int actionState, boolean isCurrentlyActive) {

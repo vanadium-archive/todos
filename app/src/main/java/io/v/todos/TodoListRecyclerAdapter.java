@@ -17,15 +17,15 @@ import io.v.todos.model.ListMetadata;
  * @author alexfandrianto
  */
 public class TodoListRecyclerAdapter extends RecyclerView.Adapter<TodoListViewHolder> {
-    private ArrayList<ListMetadata> backup;
-    private View.OnClickListener itemListener;
+    private ArrayList<ListMetadata> mBackup;
+    private View.OnClickListener mItemListener;
 
     private static final int RESOURCE_ID = R.layout.todo_list_row;
 
     public TodoListRecyclerAdapter(ArrayList<ListMetadata> backup, View.OnClickListener itemListener) {
         super();
-        this.backup = backup;
-        this.itemListener = itemListener;
+        this.mBackup = backup;
+        this.mItemListener = itemListener;
     }
 
     @Override
@@ -37,12 +37,12 @@ public class TodoListRecyclerAdapter extends RecyclerView.Adapter<TodoListViewHo
 
     @Override
     public void onBindViewHolder(TodoListViewHolder holder, int position) {
-        ListMetadata listMetadata = backup.get(position);
-        holder.bindTodoList(listMetadata, itemListener);
+        ListMetadata listMetadata = mBackup.get(position);
+        holder.bindTodoList(listMetadata, mItemListener);
     }
 
     @Override
     public int getItemCount() {
-        return backup.size();
+        return mBackup.size();
     }
 }

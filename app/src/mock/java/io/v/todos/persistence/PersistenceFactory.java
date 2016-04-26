@@ -5,7 +5,6 @@
 package io.v.todos.persistence;
 
 import android.app.Activity;
-import android.content.Context;
 
 import io.v.todos.model.ListMetadata;
 import io.v.todos.model.ListSpec;
@@ -56,7 +55,7 @@ public final class PersistenceFactory {
         public void deleteTodoList(String key) {}
 
         @Override
-        public void completeAllTasks(ListMetadata listMetadata) {}
+        public void setCompletion(ListMetadata listMetadata, boolean done) {}
 
         @Override
         public void close() {}

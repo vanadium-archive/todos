@@ -9,6 +9,7 @@ import android.app.Activity;
 import io.v.impl.google.services.syncbase.SyncbaseServer;
 import io.v.todos.model.ListMetadata;
 import io.v.todos.persistence.syncbase.SyncbaseMain;
+import io.v.todos.persistence.syncbase.SyncbaseTodoList;
 import io.v.v23.verror.VException;
 
 public final class PersistenceFactory {
@@ -37,14 +38,15 @@ public final class PersistenceFactory {
      * used.
      */
     public static boolean mightGetTodoListPersistenceBlock() {
-        return false;
+        return !SyncbaseTodoList.isInitialized();
     }
 
     /**
      * Instantiates a persistence object that can be used to manipulate a todo list.
      */
     public static TodoListPersistence getTodoListPersistence(
-            Activity activity, String key, TodoListListener listener) throws VException {
-        throw new RuntimeException("Unsupported product flavor.");
+            Activity activity, String key, TodoListListener listener)
+            throws VException, SyncbaseServer.StartException {
+        return new SyncbaseTodoList(activity, key, listener);
     }
 }

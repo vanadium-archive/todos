@@ -10,5 +10,5 @@ import io.v.todos.model.ListSpec;
 public interface MainPersistence extends Persistence {
     void addTodoList(ListSpec listSpec);
     void deleteTodoList(String key);
-    void completeAllTasks(ListMetadata listMetadata);
+    void setCompletion(ListMetadata listMetadata, boolean done);
 }

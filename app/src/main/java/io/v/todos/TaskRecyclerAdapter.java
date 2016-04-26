@@ -17,16 +17,16 @@ import io.v.todos.model.Task;
  * @author alexfandrianto
  */
 public class TaskRecyclerAdapter extends RecyclerView.Adapter<TaskViewHolder> {
-    private ArrayList<Task> backup;
-    private View.OnClickListener itemListener;
-    private boolean showDone = true;
+    private ArrayList<Task> mBackup;
+    private View.OnClickListener mItemListener;
+    private boolean mShowDone = true;
 
     private static final int RESOURCE_ID = R.layout.task_row;
 
     public TaskRecyclerAdapter(ArrayList<Task> backup, View.OnClickListener itemListener) {
         super();
-        this.backup = backup;
-        this.itemListener = itemListener;
+        mBackup = backup;
+        mItemListener = itemListener;
     }
 
     @Override
@@ -38,26 +38,39 @@ public class TaskRecyclerAdapter extends RecyclerView.Adapter<TaskViewHolder> {
 
     @Override
     public void onBindViewHolder(TaskViewHolder holder, int position) {
-        Task task = backup.get(position);
-        holder.bindTask(task, itemListener);
+        Task task = mBackup.get(position);
+        holder.bindTask(task, mItemListener);
     }
 
     @Override
     public int getItemCount() {
-        return showDone ? backup.size() : nonDoneSize();
+        return mShowDone ? mBackup.size() : nonDoneSize();
     }
 
     private int nonDoneSize() {
-        for (int i = 0; i < backup.size(); i++) {
-            if (backup.get(i).done) {
+        for (int i = 0; i < mBackup.size(); i++) {
+            if (mBackup.get(i).done) {
                 return i;
             }
         }
-        return backup.size();
+        return mBackup.size();
     }
 
     public void setShowDone(boolean showDone) {
-        this.showDone = showDone;
-        this.notifyDataSetChanged();
+        if (mShowDone != showDone) {
+            mShowDone = showDone;
+            int nonDoneSize = nonDoneSize(),
+                doneSize = mBackup.size() - nonDoneSize;
+
+            if (showDone) {
+                notifyItemRangeInserted(nonDoneSize, doneSize);
+            } else {
+                notifyItemRangeRemoved(nonDoneSize, doneSize);
+            }
+        }
+    }
+
+    public boolean getShowDone() {
+        return mShowDone;
     }
 }

@@ -29,7 +29,9 @@ import static android.support.test.espresso.matcher.ViewMatchers.withId;
 import static android.support.test.espresso.matcher.ViewMatchers.withText;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -125,7 +127,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
 
         verify(mocked).addTodoList(any(ListSpec.class));
         verify(mocked, never()).deleteTodoList(anyString());
-        verify(mocked, never()).completeAllTasks(any(ListMetadata.class));
+        verify(mocked, never()).setCompletion(any(ListMetadata.class), anyBoolean());
     }
 
     // Press the fab but don't actually add the item.
@@ -141,7 +143,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
 
         verify(mocked, never()).addTodoList(any(ListSpec.class));
         verify(mocked, never()).deleteTodoList(anyString());
-        verify(mocked, never()).completeAllTasks(any(ListMetadata.class));
+        verify(mocked, never()).setCompletion(any(ListMetadata.class), anyBoolean());
     }
 
     // Press the fab but don't actually add the item.
@@ -157,7 +159,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
 
         verify(mocked, never()).addTodoList(any(ListSpec.class));
         verify(mocked, never()).deleteTodoList(anyString());
-        verify(mocked, never()).completeAllTasks(any(ListMetadata.class));
+        verify(mocked, never()).setCompletion(any(ListMetadata.class), anyBoolean());
     }
 
     // Add some default items so that we can interact with them with swipes.
@@ -265,7 +267,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
 
         verify(mocked, never()).addTodoList(any(ListSpec.class));
         verify(mocked, never()).deleteTodoList(anyString());
-        verify(mocked).completeAllTasks(any(ListMetadata.class));
+        verify(mocked).setCompletion(any(ListMetadata.class), eq(true));
     }
 
     // Swipe a todo list item to the left to attempt to delete it.
@@ -282,7 +284,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
 
         verify(mocked, never()).addTodoList(any(ListSpec.class));
         verify(mocked).deleteTodoList(anyString());
-        verify(mocked, never()).completeAllTasks(any(ListMetadata.class));
+        verify(mocked, never()).setCompletion(any(ListMetadata.class), anyBoolean());
     }
 
     // Tap a todo list item to launch its corresponding TodoListActivity

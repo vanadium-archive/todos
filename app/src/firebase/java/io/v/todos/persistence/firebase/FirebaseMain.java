@@ -84,7 +84,7 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
     }
 
     @Override
-    public void completeAllTasks(final ListMetadata listMetadata) {
+    public void setCompletion(final ListMetadata listMetadata, final boolean done) {
         // Update all child tasks for this key to have done = true.
         Firebase tasksRef = getFirebase().child(FirebaseTodoList.TASKS).child(listMetadata.key);
         tasksRef.runTransaction(new Transaction.Handler() {
@@ -94,7 +94,7 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
                 // this in a batch or to split up the Task into components.
                 for (MutableData taskData : mutableData.getChildren()) {
                     TaskSpec spec = taskData.getValue(TaskSpec.class);
-                    spec.setDone(true);
+                    spec.setDone(done);
                     taskData.setValue(spec);
                 }
                 return Transaction.success(mutableData);

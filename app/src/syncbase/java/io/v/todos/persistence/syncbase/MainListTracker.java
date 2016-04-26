@@ -41,7 +41,7 @@ public class MainListTracker {
 
     private final Map<String, Boolean> mIsTaskCompleted = new HashMap<>();
     private int mNumCompletedTasks;
-    private boolean mFireUpdates;
+    private boolean mListExistsLocally;
 
     public final ListenableFuture<Void> watchFuture;
 
@@ -108,10 +108,10 @@ public class MainListTracker {
             ListMetadata listMetadata = getListMetadata();
             Log.d(TAG, listMetadata.toString());
 
-            if (mFireUpdates) {
+            if (mListExistsLocally) {
                 mListener.onItemUpdate(listMetadata);
             } else {
-                mFireUpdates = true;
+                mListExistsLocally = true;
                 mListener.onItemAdd(listMetadata);
             }
         }

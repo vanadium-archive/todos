@@ -46,7 +46,6 @@ public class TodoListActivity extends Activity {
 
     // The menu item that toggles whether done items are shown or not.
     private MenuItem mShowDoneMenuItem;
-    private boolean mShowDone; // mirrors the checked status of mShowDoneMenuItem
 
     @Override
     protected void onDestroy() {
@@ -110,7 +109,6 @@ public class TodoListActivity extends Activity {
 
                             @Override
                             public void onUpdateShowDone(boolean showDone) {
-                                mShowDone = showDone;
                                 if (mShowDoneMenuItem != null) {
                                     // Only interact with mShowDoneMenu if it has been inflated.
                                     mShowDoneMenuItem.setChecked(showDone);
@@ -212,8 +210,8 @@ public class TodoListActivity extends Activity {
         // Also, obtain the reference to the show done menu item.
         mShowDoneMenuItem = menu.findItem(R.id.show_done);
 
-        // Since the menu item may be inflated too late, set checked to mShowDone.
-        mShowDoneMenuItem.setChecked(mShowDone);
+        // Since the menu item may be inflated too late, set checked to the adapter's value.
+        mShowDoneMenuItem.setChecked(adapter.getShowDone());
 
         return true;
     }

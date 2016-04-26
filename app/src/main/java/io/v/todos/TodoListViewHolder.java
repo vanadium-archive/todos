@@ -13,19 +13,19 @@ import io.v.todos.model.ListMetadata;
  * @author alexfandrianto
  */
 public class TodoListViewHolder extends SwipeableCardViewHolder {
+    private final TextView mName, mCompletedStatus, mTimeAgo;
+
     public TodoListViewHolder(View itemView) {
         super(itemView);
+        mName = (TextView) itemView.findViewById(R.id.todo_list_name);
+        mCompletedStatus = (TextView) itemView.findViewById(R.id.todo_list_completed);
+        mTimeAgo = (TextView) itemView.findViewById(R.id.todo_list_time);
     }
 
     public void bindTodoList(ListMetadata listMetadata, View.OnClickListener listener) {
-        final TextView name=(TextView) itemView.findViewById(R.id.todo_list_name);
-        name.setText(listMetadata.name);
-
-        final TextView completedStatus=(TextView) itemView.findViewById(R.id.todo_list_completed);
-        completedStatus.setText(computeCompleted(listMetadata));
-
-        final TextView timeAgo=(TextView) itemView.findViewById(R.id.todo_list_time);
-        timeAgo.setText(computeTimeAgo(listMetadata));
+        mName.setText(listMetadata.name);
+        mCompletedStatus.setText(computeCompleted(listMetadata));
+        mTimeAgo.setText(computeTimeAgo(listMetadata));
 
         getCardView().setCardBackgroundColor(listMetadata.isDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
 
@@ -47,5 +47,10 @@ public class TodoListViewHolder extends SwipeableCardViewHolder {
         } else {
             return listMetadata.numCompleted + " of " + listMetadata.numTasks;
         }
+    }
+
+    @Override
+    public String toString() {
+        return mName.getText() + " (" + mCompletedStatus.getText() + "), " + mTimeAgo.getText();
     }
 }

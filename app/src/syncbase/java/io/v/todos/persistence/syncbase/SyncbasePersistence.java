@@ -24,6 +24,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 
 import java.io.File;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 
 import javax.annotation.Nullable;
@@ -41,6 +42,7 @@ import io.v.v23.security.Blessings;
 import io.v.v23.security.access.AccessList;
 import io.v.v23.security.access.Constants;
 import io.v.v23.security.access.Permissions;
+import io.v.v23.syncbase.Collection;
 import io.v.v23.syncbase.Database;
 import io.v.v23.syncbase.Syncbase;
 import io.v.v23.syncbase.SyncbaseService;
@@ -60,6 +62,8 @@ public class SyncbasePersistence implements Persistence {
             PROXY = "proxy",
             DATABASE = "db",
             BLESSINGS_KEY = "blessings";
+    public static final String
+            USER_COLLECTION_NAME = "userdata";
     // BlessingPattern initialization has to be deferred until after V23 init due to native binding.
     private static final Supplier<AccessList> OPEN_ACL = Suppliers.memoize(
             new Supplier<AccessList>() {
@@ -107,7 +111,7 @@ public class SyncbasePersistence implements Persistence {
      * @throws io.v.impl.google.services.syncbase.SyncbaseServer.StartException if there was an
      * error starting the syncbase service
      */
-    private static SyncbaseService ensureSyncbaseStarted(Context androidContext)
+    private static void ensureSyncbaseStarted(Context androidContext)
             throws SyncbaseServer.StartException {
         synchronized (sSyncbaseMutex) {
             if (sSyncbase == null) {
@@ -140,13 +144,12 @@ public class SyncbasePersistence implements Persistence {
                 sVContext = singletonContext;
             }
         }
-        return sSyncbase;
     }
 
     private static final Object sDatabaseMutex = new Object();
     private static Database sDatabase;
 
-    private static Database ensureDatabaseExists(Context androidContext) throws VException {
+    private static void ensureDatabaseExists() throws VException {
         synchronized (sDatabaseMutex) {
             if (sDatabase == null) {
                 final Database db = sSyncbase.getDatabase(sVContext, DATABASE, null);
@@ -159,7 +162,32 @@ public class SyncbasePersistence implements Persistence {
                 sDatabase = db;
             }
         }
-        return sDatabase;
+    }
+
+    private static final Object sUserCollectionMutex = new Object();
+    private static volatile Collection sUserCollection;
+
+    private static void ensureUserCollectionExists() throws VException {
+        synchronized (sUserCollectionMutex) {
+            if (sUserCollection == null) {
+                Collection userCollection = sDatabase.getCollection(sVContext,
+                        USER_COLLECTION_NAME);
+                try {
+                    VFutures.sync(userCollection.create(sVContext, null));
+                } catch (ExistException e) {
+                    // This is fine.
+                }
+                sUserCollection = userCollection;
+            }
+        }
+    }
+
+    public static boolean isInitialized() {
+        return sUserCollection != null;
+    }
+
+    protected static String randomName() {
+        return UUID.randomUUID().toString().replace('-', '_');
     }
 
     /**
@@ -224,6 +252,10 @@ public class SyncbasePersistence implements Persistence {
         return sDatabase;
     }
 
+    protected Collection getUserCollection() {
+        return sUserCollection;
+    }
+
     /**
      * @see TrappingCallback
      */
@@ -256,7 +288,8 @@ public class SyncbasePersistence implements Persistence {
         }
         VFutures.sync(Futures.dereference(blessings));
         ensureSyncbaseStarted(activity);
-        ensureDatabaseExists(activity);
+        ensureDatabaseExists();
+        ensureUserCollectionExists();
     }
 
     @Override
