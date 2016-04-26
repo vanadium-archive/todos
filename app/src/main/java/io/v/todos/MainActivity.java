@@ -7,6 +7,7 @@ package io.v.todos;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.annotation.VisibleForTesting;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.view.Menu;
@@ -40,7 +41,7 @@ public class MainActivity extends Activity {
     // These todos are backed up at the SNACKOOS child of the Firebase URL.
     // We use the snackoosList to track a custom sorted list of the stored values.
     static final String INTENT_SNACKOO_KEY = "snackoo key";
-    private DataList<ListMetadata> snackoosList = new DataList<ListMetadata>();
+    private DataList<ListMetadata> snackoosList = new DataList<>();
 
     // This adapter handle mirrors the firebase list values and generates the corresponding todo
     // item View children for a list view.
@@ -107,32 +108,7 @@ public class MainActivity extends Activity {
             @Override
             protected MainPersistence initPersistence() throws Exception {
                 return PersistenceFactory.getMainPersistence(mActivity,
-                        new ListEventListener<ListMetadata>() {
-                            @Override
-                            public void onItemAdd(ListMetadata item) {
-                                int position = snackoosList.insertInOrder(item);
-
-                                adapter.notifyItemInserted(position);
-                                setEmptyVisiblity();
-                            }
-
-                            @Override
-                            public void onItemUpdate(ListMetadata item) {
-                                int start = snackoosList.findIndexByKey(item.key);
-                                int end = snackoosList.updateInOrder(item);
-
-                                adapter.notifyItemMoved(start, end);
-                                adapter.notifyItemChanged(end);
-                            }
-
-                            @Override
-                            public void onItemDelete(String key) {
-                                int position = snackoosList.removeByKey(key);
-
-                                adapter.notifyItemRemoved(position);
-                                setEmptyVisiblity();
-                            }
-                        });
+                        createMainListener());
             }
 
             @Override
@@ -140,6 +116,44 @@ public class MainActivity extends Activity {
                 mPersistence = persistence;
             }
         }.execute(PersistenceFactory.mightGetMainPersistenceBlock());
+    }
+
+    // Creates a listener for this activity. Visible to tests to allow them to invoke the listener
+    // methods directly.
+    @VisibleForTesting
+    ListEventListener<ListMetadata> createMainListener() {
+        return new ListEventListener<ListMetadata>() {
+            @Override
+            public void onItemAdd(ListMetadata item) {
+                int position = snackoosList.insertInOrder(item);
+
+                adapter.notifyItemInserted(position);
+                setEmptyVisiblity();
+            }
+
+            @Override
+            public void onItemUpdate(ListMetadata item) {
+                int start = snackoosList.findIndexByKey(item.key);
+                int end = snackoosList.updateInOrder(item);
+
+                adapter.notifyItemMoved(start, end);
+                adapter.notifyItemChanged(end);
+            }
+
+            @Override
+            public void onItemDelete(String key) {
+                int position = snackoosList.removeByKey(key);
+
+                adapter.notifyItemRemoved(position);
+                setEmptyVisiblity();
+            }
+        };
+    }
+
+    // Allow the tests to mock out the main persistence.
+    @VisibleForTesting
+    void setMainPersistence(MainPersistence p) {
+        mPersistence = p;
     }
 
     // Set the visibility based on what the adapter thinks is the visible item count.

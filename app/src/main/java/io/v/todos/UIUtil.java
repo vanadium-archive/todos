@@ -19,6 +19,11 @@ public class UIUtil {
         return prefix + ": " + DateUtils.getRelativeTimeSpanString(startTime);
     }
 
+    private static AlertDialog lastDialog;
+    public static AlertDialog getLastDialog() {
+        return lastDialog;
+    }
+
     public static void showAddDialog(Context context, String title,
                                      final DialogResponseListener addListener) {
         final EditText todoItem = new EditText(context);
@@ -37,6 +42,7 @@ public class UIUtil {
                 }).show();
         dialog.getWindow().setSoftInputMode(
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        lastDialog = dialog;
     }
 
     public static void showEditDialog(Context context, String title, String defaultValue,
@@ -63,6 +69,7 @@ public class UIUtil {
                 }).show();
         dialog.getWindow().setSoftInputMode(
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        lastDialog = dialog;
     }
 
     public static abstract class DialogResponseListener {
