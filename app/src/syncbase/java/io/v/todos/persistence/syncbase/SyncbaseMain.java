@@ -5,6 +5,7 @@
 package io.v.todos.persistence.syncbase;
 
 import android.app.Activity;
+import android.support.annotation.NonNull;
 import android.util.Log;
 
 import com.google.common.util.concurrent.Futures;
@@ -37,6 +38,7 @@ import io.v.v23.syncbase.Collection;
 import io.v.v23.syncbase.RowRange;
 import io.v.v23.syncbase.WatchChange;
 import io.v.v23.vdl.VdlAny;
+import io.v.v23.verror.NoExistException;
 import io.v.v23.verror.VException;
 import io.v.v23.vom.VomUtil;
 
@@ -60,10 +62,12 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         trap(InputChannels.withCallback(watch, new InputChannelCallback<WatchChange>() {
             @Override
             public ListenableFuture<Void> onNext(WatchChange change) {
-                String listId = change.getRowName();
+                final String listId = change.getRowName();
 
                 if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
-                    trap(mTaskTrackers.remove(listId).deleteList(mVContext));
+                    // (this is idempotent)
+                    Log.d(TAG, listId + " removed from index");
+                    deleteTodoList(listId);
                 } else {
                     mIdGenerator.registerId(change.getRowName().substring(LISTS_PREFIX.length()));
 
@@ -76,7 +80,19 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                                 "for list " + listId);
                     }
 
-                    trap(listTracker.watchFuture);
+                    // If the watch fails with NoExistException, the collection has been deleted.
+                    Futures.addCallback(listTracker.watchFuture,
+                            new TrappingCallback<Void>(mActivity) {
+                                @Override
+                                public void onFailure(@NonNull Throwable t) {
+                                    if (t instanceof NoExistException) {
+                                        // (this is idempotent)
+                                        trap(getUserCollection().delete(mVContext, listId));
+                                    } else {
+                                        super.onFailure(t);
+                                    }
+                                }
+                            });
                 }
                 return null;
             }
@@ -101,7 +117,10 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
     @Override
     public void deleteTodoList(String key) {
-        trap(getUserCollection().delete(mVContext, key));
+        MainListTracker tracker = mTaskTrackers.remove(key);
+        if (tracker != null) {
+            trap(tracker.collection.destroy(mVContext));
+        }
     }
 
     @Override

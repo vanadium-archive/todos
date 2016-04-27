@@ -4,9 +4,10 @@
 
 package io.v.todos.persistence.syncbase;
 
+import android.support.annotation.NonNull;
 import android.util.Log;
 
-import com.google.common.base.Function;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -27,6 +28,7 @@ import io.v.v23.syncbase.ChangeType;
 import io.v.v23.syncbase.Collection;
 import io.v.v23.syncbase.Database;
 import io.v.v23.syncbase.WatchChange;
+import io.v.v23.verror.NoExistException;
 
 /**
  * This class aggregates Todo-list watch data from Syncbase into {@link ListMetadata}.
@@ -34,8 +36,6 @@ import io.v.v23.syncbase.WatchChange;
 public class MainListTracker {
     private static final String TAG = MainListTracker.class.getSimpleName();
 
-    private final VContext mWatchContext;
-    private final Collection mList;
     private final ListEventListener<ListMetadata> mListener;
     private ListSpec mListSpec;
 
@@ -43,15 +43,14 @@ public class MainListTracker {
     private int mNumCompletedTasks;
     private boolean mListExistsLocally;
 
+    public final Collection collection;
     public final ListenableFuture<Void> watchFuture;
 
-    public MainListTracker(VContext vContext, Database database, String listId,
+    public MainListTracker(VContext vContext, Database database, final String listId,
                            ListEventListener<ListMetadata> listener) {
-        mList = database.getCollection(vContext, listId);
+        collection = database.getCollection(vContext, listId);
         mListener = listener;
-
-        mWatchContext = vContext.withCancel();
-        InputChannel<WatchChange> watch = database.watch(mWatchContext, mList.id(), "");
+        InputChannel<WatchChange> watch = database.watch(vContext, collection.id(), "");
         watchFuture = InputChannels.withCallback(watch, new InputChannelCallback<WatchChange>() {
             @Override
             public ListenableFuture<Void> onNext(WatchChange change) {
@@ -59,26 +58,25 @@ public class MainListTracker {
                 return null;
             }
         });
-    }
 
-    public ListenableFuture<Void> deleteList(VContext vContext) {
-        // The watch context has to be cancelled first or else we may run into race conditions as
-        // the collection is destroyed while the watch is still ongoing, which fails the watch with
-        // a NoExistException. Alternatively we could just ignore that exception and not bother
-        // cancelling the watch at all.
-        mWatchContext.cancel();
-        return Futures.transform(mList.destroy(vContext),
-                new Function<Void, Void>() {
-                    @Override
-                    public Void apply(@Nullable Void input) {
-                        mListener.onItemDelete(mList.id().getName());
-                        return null;
-                    }
-                });
+        // If the watch fails with NoExistException, the collection has been deleted.
+        Futures.addCallback(watchFuture, new FutureCallback<Void>() {
+            @Override
+            public void onSuccess(@Nullable Void result) {
+            }
+
+            @Override
+            public void onFailure(@NonNull Throwable t) {
+                if (t instanceof NoExistException && mListExistsLocally) {
+                    Log.d(TAG, listId + " destroyed");
+                    mListener.onItemDelete(listId);
+                }
+            }
+        });
     }
 
     public ListMetadata getListMetadata() {
-        return new ListMetadata(mList.id().getName(), mListSpec, mNumCompletedTasks,
+        return new ListMetadata(collection.id().getName(), mListSpec, mNumCompletedTasks,
                 mIsTaskCompleted.size());
     }
 
