@@ -12,7 +12,8 @@ import io.v.todos.model.Task;
 import io.v.todos.model.TaskSpec;
 
 public final class PersistenceFactory {
-    private PersistenceFactory(){}
+    private PersistenceFactory() {
+    }
 
     /**
      * Indicates whether {@link #getMainPersistence(Activity, ListEventListener)} may block. This
@@ -49,38 +50,49 @@ public final class PersistenceFactory {
 
     static class MockMainPersistence implements MainPersistence {
         @Override
-        public void addTodoList(ListSpec listSpec) {}
+        public void addTodoList(ListSpec listSpec) {
+        }
 
         @Override
-        public void deleteTodoList(String key) {}
+        public void deleteTodoList(String key) {
+        }
 
         @Override
-        public void setCompletion(ListMetadata listMetadata, boolean done) {}
+        public void setCompletion(ListMetadata listMetadata, boolean done) {
+        }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
     }
 
     static class MockTodoListPersistence implements TodoListPersistence {
         @Override
-        public void updateTodoList(ListSpec listSpec) {}
+        public void updateTodoList(ListSpec listSpec) {
+        }
 
         @Override
-        public void deleteTodoList() {}
+        public void deleteTodoList() {
+        }
 
         @Override
-        public void addTask(TaskSpec task) {}
+        public void addTask(TaskSpec task) {
+        }
 
         @Override
-        public void updateTask(Task task) {}
+        public void updateTask(Task task) {
+        }
 
         @Override
-        public void deleteTask(String key) {}
+        public void deleteTask(String key) {
+        }
 
         @Override
-        public void setShowDone(boolean showDone) {}
+        public void setShowDone(boolean showDone) {
+        }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
     }
 }

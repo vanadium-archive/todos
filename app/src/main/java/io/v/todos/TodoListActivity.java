@@ -7,6 +7,7 @@ package io.v.todos;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.annotation.VisibleForTesting;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.view.Menu;
@@ -18,6 +19,7 @@ import io.v.todos.model.DataList;
 import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
 import io.v.todos.model.TaskSpec;
+import io.v.todos.persistence.MainPersistence;
 import io.v.todos.persistence.PersistenceFactory;
 import io.v.todos.persistence.TodoListListener;
 import io.v.todos.persistence.TodoListPersistence;
@@ -95,65 +97,78 @@ public class TodoListActivity extends Activity {
             @Override
             protected TodoListPersistence initPersistence() throws Exception {
                 return PersistenceFactory.getTodoListPersistence(mActivity, snackooKey,
-                        new TodoListListener() {
-                            @Override
-                            public void onUpdate(ListSpec value) {
-                                snackoo = value;
-                                getActionBar().setTitle(snackoo.getName());
-                            }
-
-                            @Override
-                            public void onDelete() {
-                                finish();
-                            }
-
-                            @Override
-                            public void onUpdateShowDone(boolean showDone) {
-                                if (mShowDoneMenuItem != null) {
-                                    // Only interact with mShowDoneMenu if it has been inflated.
-                                    mShowDoneMenuItem.setChecked(showDone);
-                                }
-
-                                int oldSize = adapter.getItemCount();
-                                adapter.setShowDone(showDone);
-                                int newSize = adapter.getItemCount();
-                                if (newSize > oldSize) {
-                                    adapter.notifyItemRangeInserted(oldSize, newSize - oldSize);
-                                } else {
-                                    adapter.notifyItemRangeRemoved(newSize, oldSize - newSize);
-                                }
-                                setEmptyVisiblity();
-                            }
-
-                            @Override
-                            public void onItemAdd(Task item) {
-                                int position = snackoosList.insertInOrder(item);
-                                adapter.notifyItemInserted(position);
-                                setEmptyVisiblity();
-                            }
-
-                            @Override
-                            public void onItemUpdate(Task item) {
-                                int start = snackoosList.findIndexByKey(item.key);
-                                int end = snackoosList.updateInOrder(item);
-                                adapter.notifyItemMoved(start, end);
-                                adapter.notifyItemChanged(end);
-                                setEmptyVisiblity();
-                            }
-
-                            @Override
-                            public void onItemDelete(String key) {
-                                int position = snackoosList.removeByKey(key);
-                                adapter.notifyItemRemoved(position);
-                                setEmptyVisiblity();
-                            }
-                        });
+                        createTodoListListener());
             }
 
             protected void onSuccess(TodoListPersistence persistence) {
                 mPersistence = persistence;
             }
         }.execute(PersistenceFactory.mightGetTodoListPersistenceBlock());
+    }
+
+    // Creates a listener for this activity. Visible to tests to allow them to invoke the listener
+    // methods directly.
+    @VisibleForTesting
+    TodoListListener createTodoListListener() {
+        return new TodoListListener() {
+            @Override
+            public void onUpdate(ListSpec value) {
+                snackoo = value;
+                getActionBar().setTitle(snackoo.getName());
+            }
+
+            @Override
+            public void onDelete() {
+                finish();
+            }
+
+            @Override
+            public void onUpdateShowDone(boolean showDone) {
+                if (mShowDoneMenuItem != null) {
+                    // Only interact with mShowDoneMenu if it has been inflated.
+                    mShowDoneMenuItem.setChecked(showDone);
+                }
+
+                int oldSize = adapter.getItemCount();
+                adapter.setShowDone(showDone);
+                int newSize = adapter.getItemCount();
+                if (newSize > oldSize) {
+                    adapter.notifyItemRangeInserted(oldSize, newSize - oldSize);
+                } else {
+                    adapter.notifyItemRangeRemoved(newSize, oldSize - newSize);
+                }
+                setEmptyVisiblity();
+            }
+
+            @Override
+            public void onItemAdd(Task item) {
+                int position = snackoosList.insertInOrder(item);
+                adapter.notifyItemInserted(position);
+                setEmptyVisiblity();
+            }
+
+            @Override
+            public void onItemUpdate(Task item) {
+                int start = snackoosList.findIndexByKey(item.key);
+                int end = snackoosList.updateInOrder(item);
+                adapter.notifyItemMoved(start, end);
+                adapter.notifyItemChanged(end);
+                setEmptyVisiblity();
+            }
+
+            @Override
+            public void onItemDelete(String key) {
+                int position = snackoosList.removeByKey(key);
+                adapter.notifyItemRemoved(position);
+                setEmptyVisiblity();
+            }
+        };
+    }
+
+    // Allow the tests to mock out the main persistence.
+    @VisibleForTesting
+    void setTodoListPersistence(TodoListPersistence p) {
+        mPersistence = p;
     }
 
     // Set the visibility based on what the adapter thinks is the visible item count.

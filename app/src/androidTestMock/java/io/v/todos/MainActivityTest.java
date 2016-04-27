@@ -10,7 +10,6 @@ import android.support.test.espresso.intent.Intents;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.RecyclerView;
 import android.test.ActivityInstrumentationTestCase2;
-import android.widget.EditText;
 
 import io.v.todos.model.ListMetadata;
 import io.v.todos.model.ListSpec;
@@ -18,23 +17,15 @@ import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.MainPersistence;
 
 import static android.support.test.espresso.Espresso.onView;
-import static android.support.test.espresso.action.ViewActions.click;
-import static android.support.test.espresso.action.ViewActions.swipeLeft;
-import static android.support.test.espresso.action.ViewActions.swipeRight;
+import static android.support.test.espresso.action.ViewActions.*;
 import static android.support.test.espresso.assertion.ViewAssertions.matches;
 import static android.support.test.espresso.intent.Intents.intended;
 import static android.support.test.espresso.intent.matcher.IntentMatchers.hasComponent;
-import static android.support.test.espresso.matcher.ViewMatchers.hasDescendant;
-import static android.support.test.espresso.matcher.ViewMatchers.withId;
-import static android.support.test.espresso.matcher.ViewMatchers.withText;
+import static android.support.test.espresso.matcher.ViewMatchers.*;
+import static io.v.todos.TestUtil.*;
 import static org.hamcrest.Matchers.not;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Matchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * Contains UI tests for the MainActivity that isolate the MainPersistence's behavior.
@@ -47,13 +38,6 @@ import static org.mockito.Mockito.verify;
  * Created by alexfandrianto on 4/21/16.
  */
 public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActivity> {
-    private static final String KEY1 = "asdlkjweriousdf";
-    private static final String KEY2 = "woeiuflskjeroius";
-    private static final String NAME1 = "weoislkjdflkejroif";
-    private static final String NAME2 = "weurlksdnoielrkmlsd";
-    private static final String NAME3 = "oisdlkwejrllisdfelkejr";
-    private static final long UI_DELAY = 500; // Tweak this value to adjust the test speed.
-
     private MainActivity mActivity;
 
     public MainActivityTest() {
@@ -80,44 +64,16 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
         }
     }
 
-    private void pause() {
-        try {
-            Thread.sleep(UI_DELAY);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-
     private MainPersistence mockPersistence() {
         MainPersistence mocked = mock(MainPersistence.class);
         mActivity.setMainPersistence(mocked);
         return mocked;
     }
 
-    private AlertDialog beginAddItem() {
-        onView(withId(R.id.fab)).perform(click());
-        pause();
-
-        final AlertDialog dialog = UIUtil.getLastDialog();
-
-        assertTrue(dialog.isShowing());
-
-        mActivity.runOnUiThread(new Runnable() {
-            public void run() {
-                EditText et = (EditText) dialog.getCurrentFocus();
-                et.setText("HELLO WORLD!");
-            }
-        });
-
-        pause();
-
-        return dialog;
-    }
-
     // Press the fab to attempt to add an item.
     public void testAttemptAddItem() {
         MainPersistence mocked = mockPersistence();
-        AlertDialog dialog = beginAddItem();
+        AlertDialog dialog = beginAddItem(mActivity);
 
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).callOnClick();
 
@@ -133,7 +89,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
     // Press the fab but don't actually add the item.
     public void testAttemptAddItemFail() {
         MainPersistence mocked = mockPersistence();
-        AlertDialog dialog = beginAddItem();
+        AlertDialog dialog = beginAddItem(mActivity);
 
         dialog.getButton(DialogInterface.BUTTON_NEGATIVE).callOnClick();
 
@@ -149,7 +105,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
     // Press the fab but don't actually add the item.
     public void testAttemptAddItemCancel() {
         MainPersistence mocked = mockPersistence();
-        AlertDialog dialog = beginAddItem();
+        AlertDialog dialog = beginAddItem(mActivity);
 
         dialog.dismiss();
 
@@ -261,7 +217,8 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
         pause();
 
         // DO UI INTERACTION
-        onView(withId(R.id.recycler)).perform(RecyclerViewActions.actionOnItemAtPosition(1, swipeRight()));
+        onView(withId(R.id.recycler)).perform(RecyclerViewActions.actionOnItemAtPosition(1,
+                swipeRight()));
 
         pause();
 
@@ -278,7 +235,8 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
         pause();
 
         // DO UI INTERACTION
-        onView(withId(R.id.recycler)).perform(RecyclerViewActions.actionOnItemAtPosition(1, swipeLeft()));
+        onView(withId(R.id.recycler)).perform(RecyclerViewActions.actionOnItemAtPosition(1,
+                swipeLeft()));
 
         pause();
 
@@ -295,7 +253,8 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
         pause();
 
         // DO UI INTERACTION
-        onView(withId(R.id.recycler)).perform(RecyclerViewActions.actionOnItemAtPosition(1, click()));
+        onView(withId(R.id.recycler)).perform(RecyclerViewActions.actionOnItemAtPosition(1, click
+                ()));
 
         pause();
 
