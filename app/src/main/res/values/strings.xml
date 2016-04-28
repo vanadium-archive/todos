@@ -1,5 +1,4 @@
 <resources>
-    <string name="app_name">Vanadium Todos</string>
     <string name="action_settings">Settings</string>
     <string name="action_edit">Edit</string>
     <string name="action_debug">Debug</string>
