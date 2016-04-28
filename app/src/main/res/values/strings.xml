@@ -9,6 +9,7 @@
     <string name="init_persistence">Initializing&#8230;</string>
     <string name="no_lists">No todo lists.\nPress \'+\' to add lists.</string>
     <string name="no_tasks">No tasks.\nPress \'+\' to add tasks.</string>
+    <string name="just_now">Just now</string>
     <!-- Errors -->
     <string name="err_init">Unable to initialize persistence</string>
     <string name="err_sync">Unable to sync</string>

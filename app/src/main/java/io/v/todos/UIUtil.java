@@ -11,15 +11,21 @@ import android.text.format.DateUtils;
 import android.view.WindowManager;
 import android.widget.EditText;
 
-/**
- * Created by alexfandrianto on 4/18/16.
- */
-public class UIUtil {
-    public static String computeTimeAgo(String prefix, long startTime) {
-        return prefix + ": " + DateUtils.getRelativeTimeSpanString(startTime);
+public final class UIUtil {
+    private UIUtil() {
+    }
+
+    private static final long JUST_NOW_DURATION = 60 * 1000 - 1;
+
+    public static String computeTimeAgo(Context context, String prefix, long startTime) {
+        long now = System.currentTimeMillis();
+        return prefix + ": " + (now - startTime > JUST_NOW_DURATION ?
+                DateUtils.getRelativeTimeSpanString(startTime, now, DateUtils.MINUTE_IN_MILLIS) :
+                context.getString(R.string.just_now));
     }
 
     private static AlertDialog lastDialog;
+
     public static AlertDialog getLastDialog() {
         return lastDialog;
     }
@@ -74,6 +80,8 @@ public class UIUtil {
 
     public static abstract class DialogResponseListener {
         public abstract void handleResponse(String response);
-        public void handleDelete() {}
+
+        public void handleDelete() {
+        }
     }
 }

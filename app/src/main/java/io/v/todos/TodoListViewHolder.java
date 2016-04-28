@@ -34,7 +34,8 @@ public class TodoListViewHolder extends SwipeableCardViewHolder {
     }
 
     private String computeTimeAgo(ListMetadata listMetadata) {
-        return UIUtil.computeTimeAgo("Last Updated", listMetadata.updatedAt);
+        return UIUtil.computeTimeAgo(getCardView().getContext(), "Last Updated",
+                listMetadata.updatedAt);
     }
 
     private String computeCompleted(ListMetadata listMetadata) {
