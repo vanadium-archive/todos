@@ -4,7 +4,6 @@
 
 package io.v.todos;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.VisibleForTesting;
@@ -13,7 +12,6 @@ import android.support.v7.widget.helper.ItemTouchHelper;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.Toolbar;
 
 import io.v.todos.model.DataList;
 import io.v.todos.model.ListMetadata;
@@ -32,36 +30,20 @@ import io.v.todos.persistence.PersistenceFactory;
  *
  * @author alexfandrianto
  */
-public class MainActivity extends Activity {
-    private MainPersistence mPersistence;
-
+public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecyclerAdapter> {
     // Snackoos are the code name for the list of todos.
     // These todos are backed up at the SNACKOOS child of the Firebase URL.
     // We use mMainList to track a custom sorted list of the stored values.
     static final String INTENT_SNACKOO_KEY = "snackoo key";
     private DataList<ListMetadata> mMainList = new DataList<>();
 
-    // This adapter handle mirrors the firebase list values and generates the corresponding todo
-    // item View children for a list view.
-    private TodoListRecyclerAdapter mAdapter;
     private RecyclerView mRecyclerView;
-
-    @Override
-    protected void onDestroy() {
-        if (mPersistence != null) {
-            mPersistence.close();
-            mPersistence = null;
-        }
-        super.onDestroy();
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        setActionBar(toolbar);
         getActionBar().setTitle(R.string.app_name);
+        mEmptyView.setText(R.string.no_lists);
 
         // Set up the todo list adapter
         mAdapter = new TodoListRecyclerAdapter(mMainList, new View.OnClickListener() {
@@ -162,18 +144,6 @@ public class MainActivity extends Activity {
                         setEmptyVisiblity();
                     }
                 };
-    }
-
-    // Allow the tests to mock out the main persistence.
-    @VisibleForTesting
-    void setMainPersistence(MainPersistence p) {
-        mPersistence = p;
-    }
-
-    // Set the visibility based on what the adapter thinks is the visible item count.
-    private void setEmptyVisiblity() {
-        View v = findViewById(R.id.empty);
-        v.setVisibility(mAdapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 
     public void initiateItemAdd(View view) {

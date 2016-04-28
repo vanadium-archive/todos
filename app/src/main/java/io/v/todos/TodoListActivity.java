@@ -4,7 +4,6 @@
 
 package io.v.todos;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.VisibleForTesting;
@@ -13,13 +12,11 @@ import android.support.v7.widget.helper.ItemTouchHelper;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.Toolbar;
 
 import io.v.todos.model.DataList;
 import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
 import io.v.todos.model.TaskSpec;
-import io.v.todos.persistence.MainPersistence;
 import io.v.todos.persistence.PersistenceFactory;
 import io.v.todos.persistence.TodoListListener;
 import io.v.todos.persistence.TodoListPersistence;
@@ -36,40 +33,22 @@ import io.v.todos.persistence.TodoListPersistence;
  *
  * @author alexfandrianto
  */
-public class TodoListActivity extends Activity {
-    private TodoListPersistence mPersistence;
-
+public class TodoListActivity extends TodosAppActivity<TodoListPersistence, TaskRecyclerAdapter> {
     private ListSpec snackoo;
     private DataList<Task> snackoosList = new DataList<>();
-
-    // This adapter handle mirrors the firebase list values and generates the corresponding todo
-    // item View children for a list view.
-    private TaskRecyclerAdapter adapter;
 
     // The menu item that toggles whether done items are shown or not.
     private MenuItem mShowDoneMenuItem;
 
-    @Override
-    protected void onDestroy() {
-        if (mPersistence != null) {
-            mPersistence.close();
-            mPersistence = null;
-        }
-        super.onDestroy();
-    }
-
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        mEmptyView.setText(R.string.no_tasks);
 
         Intent intent = getIntent();
         final String snackooKey = intent.getStringExtra(MainActivity.INTENT_SNACKOO_KEY);
 
-        Toolbar toolbar = (Toolbar)findViewById(R.id.toolbar);
-        setActionBar(toolbar);
-
         // Set up the todo list adapter
-        adapter = new TaskRecyclerAdapter(snackoosList, new View.OnClickListener() {
+        mAdapter = new TaskRecyclerAdapter(snackoosList, new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 String key = (String) view.getTag();
@@ -79,7 +58,7 @@ public class TodoListActivity extends Activity {
         });
 
         RecyclerView recyclerView = (RecyclerView)findViewById(R.id.recycler);
-        recyclerView.setAdapter(adapter);
+        recyclerView.setAdapter(mAdapter);
 
         new ItemTouchHelper(new SwipeableTouchHelperCallback() {
             @Override
@@ -129,13 +108,13 @@ public class TodoListActivity extends Activity {
                     mShowDoneMenuItem.setChecked(showDone);
                 }
 
-                int oldSize = adapter.getItemCount();
-                adapter.setShowDone(showDone);
-                int newSize = adapter.getItemCount();
+                int oldSize = mAdapter.getItemCount();
+                mAdapter.setShowDone(showDone);
+                int newSize = mAdapter.getItemCount();
                 if (newSize > oldSize) {
-                    adapter.notifyItemRangeInserted(oldSize, newSize - oldSize);
+                    mAdapter.notifyItemRangeInserted(oldSize, newSize - oldSize);
                 } else {
-                    adapter.notifyItemRangeRemoved(newSize, oldSize - newSize);
+                    mAdapter.notifyItemRangeRemoved(newSize, oldSize - newSize);
                 }
                 setEmptyVisiblity();
             }
@@ -143,7 +122,7 @@ public class TodoListActivity extends Activity {
             @Override
             public void onItemAdd(Task item) {
                 int position = snackoosList.insertInOrder(item);
-                adapter.notifyItemInserted(position);
+                mAdapter.notifyItemInserted(position);
                 setEmptyVisiblity();
             }
 
@@ -151,30 +130,18 @@ public class TodoListActivity extends Activity {
             public void onItemUpdate(Task item) {
                 int start = snackoosList.findIndexByKey(item.key);
                 int end = snackoosList.updateInOrder(item);
-                adapter.notifyItemMoved(start, end);
-                adapter.notifyItemChanged(end);
+                mAdapter.notifyItemMoved(start, end);
+                mAdapter.notifyItemChanged(end);
                 setEmptyVisiblity();
             }
 
             @Override
             public void onItemDelete(String key) {
                 int position = snackoosList.removeByKey(key);
-                adapter.notifyItemRemoved(position);
+                mAdapter.notifyItemRemoved(position);
                 setEmptyVisiblity();
             }
         };
-    }
-
-    // Allow the tests to mock out the main persistence.
-    @VisibleForTesting
-    void setTodoListPersistence(TodoListPersistence p) {
-        mPersistence = p;
-    }
-
-    // Set the visibility based on what the adapter thinks is the visible item count.
-    private void setEmptyVisiblity() {
-        View v = findViewById(R.id.empty);
-        v.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 
     public void initiateItemAdd(View view) {
@@ -226,7 +193,7 @@ public class TodoListActivity extends Activity {
         mShowDoneMenuItem = menu.findItem(R.id.show_done);
 
         // Since the menu item may be inflated too late, set checked to the adapter's value.
-        mShowDoneMenuItem.setChecked(adapter.getShowDone());
+        mShowDoneMenuItem.setChecked(mAdapter.getShowDone());
 
         return true;
     }

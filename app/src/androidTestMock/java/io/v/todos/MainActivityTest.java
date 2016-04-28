@@ -66,7 +66,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
 
     private MainPersistence mockPersistence() {
         MainPersistence mocked = mock(MainPersistence.class);
-        mActivity.setMainPersistence(mocked);
+        mActivity.setPersistence(mocked);
         return mocked;
     }
 

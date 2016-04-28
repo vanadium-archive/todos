@@ -68,7 +68,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
 
     private TodoListPersistence mockPersistence() {
         TodoListPersistence mocked = mock(TodoListPersistence.class);
-        mActivity.setTodoListPersistence(mocked);
+        mActivity.setPersistence(mocked);
         return mocked;
     }
 
