@@ -4,6 +4,8 @@
 
 package io.v.todos;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.app.Activity;
 import android.os.Bundle;
 import android.support.annotation.VisibleForTesting;
@@ -16,6 +18,8 @@ import io.v.todos.persistence.Persistence;
 
 public class TodosAppActivity<P extends Persistence, A extends RecyclerView.Adapter<?>>
         extends Activity {
+    private int mShortAnimationDuration;
+
     protected P mPersistence;
     protected A mAdapter;
 
@@ -36,6 +40,8 @@ public class TodosAppActivity<P extends Persistence, A extends RecyclerView.Adap
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setActionBar(toolbar);
 
+        mShortAnimationDuration = getResources().getInteger(android.R.integer.config_shortAnimTime);
+
         mEmptyView = (TextView) findViewById(R.id.empty);
     }
 
@@ -52,6 +58,26 @@ public class TodosAppActivity<P extends Persistence, A extends RecyclerView.Adap
      * Set the visibility based on what the adapter thinks is the visible item count.
      */
     protected void setEmptyVisiblity() {
-        mEmptyView.setVisibility(mAdapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
+        if (mAdapter.getItemCount() == 0) {
+            mEmptyView.animate()
+                    .alpha(1f)
+                    .setDuration(mShortAnimationDuration)
+                    .setListener(new AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationStart(Animator animation) {
+                            mEmptyView.setVisibility(View.VISIBLE);
+                        }
+                    });
+        } else {
+            mEmptyView.animate()
+                    .alpha(0f)
+                    .setDuration(mShortAnimationDuration)
+                    .setListener(new AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(Animator animation) {
+                            mEmptyView.setVisibility(View.GONE);
+                        }
+                    });
+        }
     }
 }

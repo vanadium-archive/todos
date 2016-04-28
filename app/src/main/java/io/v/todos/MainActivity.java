@@ -92,6 +92,7 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
             @Override
             protected void onSuccess(MainPersistence persistence) {
                 mPersistence = persistence;
+                setEmptyVisiblity();
             }
         }.execute(PersistenceFactory.mightGetMainPersistenceBlock());
     }

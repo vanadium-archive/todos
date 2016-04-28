@@ -81,6 +81,7 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
 
             protected void onSuccess(TodoListPersistence persistence) {
                 mPersistence = persistence;
+                setEmptyVisiblity();
             }
         }.execute(PersistenceFactory.mightGetTodoListPersistenceBlock());
     }
