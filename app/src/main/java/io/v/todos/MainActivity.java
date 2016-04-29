@@ -128,10 +128,10 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
                         //
                         // We could queue up the next change after the current one, but it's
                         // probably better just to rebind.
-                        View view = mRecyclerView.getChildAt(end);
-                        if (view.getAlpha() < 1) {
-                            mAdapter.bindViewHolder((TodoListViewHolder) mRecyclerView
-                                    .getChildViewHolder(view), end);
+                        TodoListViewHolder vh = (TodoListViewHolder) mRecyclerView
+                                .findViewHolderForAdapterPosition(end);
+                        if (vh.itemView.getAlpha() < 1) {
+                            mAdapter.bindViewHolder(vh, end);
                         } else {
                             mAdapter.notifyItemChanged(end);
                         }
