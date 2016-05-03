@@ -6,10 +6,10 @@ package io.v.todos.persistence.syncbase;
 
 import android.app.Activity;
 import android.content.Context;
+import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
@@ -28,7 +28,10 @@ import java.util.concurrent.Executors;
 
 import javax.annotation.Nullable;
 
-import io.v.android.libs.security.BlessingsManager;
+import io.v.android.VAndroidContext;
+import io.v.android.VAndroidContexts;
+import io.v.android.security.BlessingsManager;
+import io.v.android.error.ErrorReporter;
 import io.v.android.v23.V;
 import io.v.impl.google.services.syncbase.SyncbaseServer;
 import io.v.todos.R;
@@ -322,11 +325,11 @@ public class SyncbasePersistence implements Persistence {
      */
     public static class TrappingCallback<T> implements FutureCallback<T> {
         private static final int FIRST_SIGNIFICANT_STACK_ELEMENT = 3;
-        private final Context mAndroidContext;
+        private final ErrorReporter mErrorReporter;
         private final StackTraceElement[] mCaller;
 
-        public TrappingCallback(Context androidContext) {
-            mAndroidContext = androidContext;
+        public TrappingCallback(ErrorReporter errorReporter) {
+            mErrorReporter = errorReporter;
             mCaller = Thread.currentThread().getStackTrace();
         }
 
@@ -337,8 +340,9 @@ public class SyncbasePersistence implements Persistence {
         @Override
         public void onFailure(@NonNull Throwable t) {
             if (!(t instanceof CanceledException || t instanceof ExistException)) {
-                Toast.makeText(mAndroidContext, R.string.err_sync, Toast.LENGTH_LONG).show();
-                StringBuilder traceBuilder = new StringBuilder(Throwables.getStackTraceAsString(t))
+                mErrorReporter.onError(R.string.err_sync, t);
+
+                StringBuilder traceBuilder = new StringBuilder(t.getMessage())
                         .append("\n invoked at ").append(mCaller[FIRST_SIGNIFICANT_STACK_ELEMENT]);
                 for (int i = FIRST_SIGNIFICANT_STACK_ELEMENT + 1; i < mCaller.length; i++) {
                     traceBuilder.append("\n\tat ").append(mCaller[i]);
@@ -349,7 +353,7 @@ public class SyncbasePersistence implements Persistence {
     }
 
     /**
-     * Extracts the value from a watch change.
+     * Extracts the value from a watch change or scan stream.
      * TODO(rosswang): This method is a temporary hack, awaiting resolution of the following issues:
      * <ul>
      * <li><a href="https://github.com/vanadium/issues/issues/1305">#1305</a>
@@ -357,7 +361,7 @@ public class SyncbasePersistence implements Persistence {
      * </ul>
      */
     @SuppressWarnings("unchecked")
-    public static <T> T castWatchValue(Object watchValue, Class<T> type) {
+    public static <T> T castFromSyncbase(Object watchValue, Class<T> type) {
         if (type.isInstance(watchValue)) {
             return (T) watchValue;
         }
@@ -370,8 +374,20 @@ public class SyncbasePersistence implements Persistence {
         }
     }
 
-    protected final Activity mActivity;
-    protected final VContext mVContext;
+    private final VAndroidContext<Activity> mVAndroidContext;
+
+    public VContext getVContext() {
+        return mVAndroidContext.getVContext();
+    }
+
+    public ErrorReporter getErrorReporter() {
+        return mVAndroidContext.getErrorReporter();
+    }
+
+    @Override
+    public void close() {
+        mVAndroidContext.close();
+    }
 
     protected Database getDatabase() {
         return sDatabase;
@@ -385,31 +401,29 @@ public class SyncbasePersistence implements Persistence {
      * @see TrappingCallback
      */
     protected void trap(ListenableFuture<?> future) {
-        Futures.addCallback(future, new TrappingCallback<>(mActivity));
+        Futures.addCallback(future, new TrappingCallback<>(getErrorReporter()));
     }
 
     /**
      * This constructor is blocking for simplicity.
      */
-    public SyncbasePersistence(final Activity activity)
+    public SyncbasePersistence(final Activity activity, Bundle savedInstanceState)
             throws VException, SyncbaseServer.StartException {
-        mActivity = activity;
-        mVContext = V.init(activity, new Options()
-                .set(OptionDefs.LOG_VLEVEL, 0)
-                .set(OptionDefs.LOG_VMODULE, "vsync*=0"));
+        mVAndroidContext = VAndroidContexts.withDefaults(activity, savedInstanceState);
 
         // We might not actually have to seek blessings each time, but getBlessings does not
         // block if we already have blessings and this has better-behaved lifecycle
         // implications than trying to seek blessings in the static code.
         final SettableFuture<ListenableFuture<Blessings>> blessings = SettableFuture.create();
         if (activity.getMainLooper().getThread() == Thread.currentThread()) {
-            blessings.set(BlessingsManager.getBlessings(mVContext, activity, BLESSINGS_KEY, true));
+            blessings.set(BlessingsManager.getBlessings(getVContext(), activity,
+                    BLESSINGS_KEY, true));
         } else {
             new Handler(activity.getMainLooper()).post(new Runnable() {
                 @Override
                 public void run() {
-                    blessings.set(BlessingsManager.getBlessings(
-                            mVContext, activity, BLESSINGS_KEY, true));
+                    blessings.set(BlessingsManager.getBlessings(getVContext(),
+                            activity, BLESSINGS_KEY, true));
                 }
             });
         }
@@ -420,10 +434,5 @@ public class SyncbasePersistence implements Persistence {
         ensureCloudDatabaseExists();
         ensureUserSyncgroupExists();
         sInitialized = true;
-    }
-
-    @Override
-    public void close() {
-        mVContext.cancel();
     }
 }

@@ -84,13 +84,13 @@ public class MainListTracker {
         String rowName = change.getRowName();
 
         if (rowName.equals(SyncbaseTodoList.LIST_METADATA_ROW_NAME)) {
-            mListSpec = SyncbasePersistence.castWatchValue(change.getValue(), ListSpec.class);
+            mListSpec = SyncbasePersistence.castFromSyncbase(change.getValue(), ListSpec.class);
         } else if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
             if (mIsTaskCompleted.remove(rowName)) {
                 mNumCompletedTasks--;
             }
         } else {
-            boolean isDone = SyncbasePersistence.castWatchValue(change.getValue(), TaskSpec.class)
+            boolean isDone = SyncbasePersistence.castFromSyncbase(change.getValue(), TaskSpec.class)
                     .getDone();
             Boolean rawWasDone = mIsTaskCompleted.put(rowName, isDone);
             boolean wasDone = rawWasDone != null && rawWasDone;

@@ -46,7 +46,7 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
     // The menu item that toggles whether done items are shown or not.
     private MenuItem mShowDoneMenuItem;
 
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mEmptyView.setText(R.string.no_tasks);
 
@@ -82,8 +82,8 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
         new PersistenceInitializer<TodoListPersistence>(this) {
             @Override
             protected TodoListPersistence initPersistence() throws Exception {
-                return PersistenceFactory.getTodoListPersistence(mActivity, snackooKey,
-                        createTodoListListener());
+                return PersistenceFactory.getTodoListPersistence(mActivity, savedInstanceState,
+                        snackooKey, createTodoListListener());
             }
 
             protected void onSuccess(TodoListPersistence persistence) {

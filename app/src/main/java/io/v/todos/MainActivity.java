@@ -42,7 +42,7 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
     private RecyclerView mRecyclerView;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getActionBar().setTitle(R.string.app_name);
         mEmptyView.setText(R.string.no_lists);
@@ -89,7 +89,8 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
         new PersistenceInitializer<MainPersistence>(this) {
             @Override
             protected MainPersistence initPersistence() throws Exception {
-                return PersistenceFactory.getMainPersistence(mActivity, createMainListener());
+                return PersistenceFactory.getMainPersistence(mActivity, savedInstanceState,
+                        createMainListener());
             }
 
             @Override

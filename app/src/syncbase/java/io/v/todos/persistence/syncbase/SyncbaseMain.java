@@ -5,6 +5,7 @@
 package io.v.todos.persistence.syncbase;
 
 import android.app.Activity;
+import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.util.Log;
 
@@ -47,7 +48,6 @@ import io.v.v23.syncbase.WatchChange;
 import io.v.v23.vdl.VdlAny;
 import io.v.v23.verror.NoExistException;
 import io.v.v23.verror.VException;
-import io.v.v23.vom.VomUtil;
 
 public class SyncbaseMain extends SyncbasePersistence implements MainPersistence {
     private static final String
@@ -60,14 +60,15 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     /**
      * This constructor blocks until the instance is ready for use.
      */
-    public SyncbaseMain(Activity activity, final ListEventListener<ListMetadata> listener)
+    public SyncbaseMain(Activity activity, Bundle savedInstanceState,
+                        final ListEventListener<ListMetadata> listener)
             throws VException, SyncbaseServer.StartException {
-        super(activity);
+        super(activity, savedInstanceState);
 
         // Prepare a watch on top of the userdata collection to determine which todo lists need to
         // be tracked by this application.
-        InputChannel<WatchChange> watch = getDatabase().watch(
-                mVContext, getUserCollection().id(), LISTS_PREFIX);
+        InputChannel<WatchChange> watch = getDatabase().watch(getVContext(),
+                getUserCollection().id(), LISTS_PREFIX);
         trap(InputChannels.withCallback(watch, new InputChannelCallback<WatchChange>() {
             @Override
             public ListenableFuture<Void> onNext(WatchChange change) {
@@ -82,8 +83,8 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
                     Log.d(TAG, "Found a list id from userdata watch: " + listId);
                     // TODO(alexfandrianto): Exponential backoff on joining this list syncgroup.
-                    Futures.addCallback(joinListSyncgroup(listId), new TrappingCallback
-                            <SyncgroupSpec>(mActivity) {
+                    Futures.addCallback(joinListSyncgroup(listId),
+                            new TrappingCallback<SyncgroupSpec>(getErrorReporter()) {
                         @Override
                         public void onFailure(@NonNull Throwable t) {
                             if (t instanceof SyncgroupJoinFailedException) {
@@ -102,8 +103,8 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                         }
                     });
 
-                    MainListTracker listTracker = new MainListTracker(
-                            mVContext, getDatabase(), listId, listener);
+                    MainListTracker listTracker = new MainListTracker(getVContext(), getDatabase(),
+                            listId, listener);
                     if (mTaskTrackers.put(listId, listTracker) != null) {
                         // List entries in the main collection are just ( list ID => nil ), so we
                         // never expect updates other than an initial add...
@@ -113,12 +114,12 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
                     // If the watch fails with NoExistException, the collection has been deleted.
                     Futures.addCallback(listTracker.watchFuture,
-                            new TrappingCallback<Void>(mActivity) {
+                            new TrappingCallback<Void>(getErrorReporter()) {
                                 @Override
                                 public void onFailure(@NonNull Throwable t) {
                                     if (t instanceof NoExistException) {
                                         // (this is idempotent)
-                                        trap(getUserCollection().delete(mVContext, listId));
+                                        trap(getUserCollection().delete(getVContext(), listId));
                                     } else {
                                         super.onFailure(t);
                                     }
@@ -133,18 +134,21 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     @Override
     public void addTodoList(final ListSpec listSpec) {
         final String listName = LISTS_PREFIX + mIdGenerator.generateTailId();
-        final Collection listCollection = getDatabase().getCollection(mVContext, listName);
-        Futures.addCallback(listCollection.create(mVContext, null),
-                new TrappingCallback<Void>(mActivity) {
+        final Collection listCollection = getDatabase().getCollection(getVContext(), listName);
+        Futures.addCallback(listCollection.create(getVContext(), null),
+                new TrappingCallback<Void>(getErrorReporter()) {
                     @Override
                     public void onSuccess(@Nullable Void result) {
-                        Futures.addCallback(createListSyncgroup(listCollection.id()), new TrappingCallback<Void>(mActivity) {
+                        Futures.addCallback(createListSyncgroup(listCollection.id()),
+                                new TrappingCallback<Void>(getErrorReporter()) {
                             @Override
                             public void onSuccess(@Nullable Void result) {
                                 // These can happen in either order.
-                                trap(getUserCollection().put(mVContext, listName, null, VdlAny.class));
-                                trap(listCollection.put(mVContext, SyncbaseTodoList.LIST_METADATA_ROW_NAME,
-                                        listSpec, ListSpec.class));
+                                trap(getUserCollection().put(getVContext(), listName, null,
+                                        VdlAny.class));
+                                trap(listCollection.put(getVContext(),
+                                        SyncbaseTodoList.LIST_METADATA_ROW_NAME, listSpec,
+                                        ListSpec.class));
                             }
                         });
                     }
@@ -154,13 +158,14 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     private ListenableFuture<SyncgroupSpec> joinListSyncgroup(String listId) {
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
         String sgName = computeListSyncgroupName(listId);
-        return getDatabase().getSyncgroup(sgName).join(mVContext, memberInfo);
+        return getDatabase().getSyncgroup(sgName).join(getVContext(), memberInfo);
     }
 
     private ListenableFuture<Void> createListSyncgroup(Id id) {
         String listId = id.getName();
         final String sgName = computeListSyncgroupName(listId);
-        Permissions permissions = computePermissionsFromBlessings(getPersonalBlessings(mVContext));
+        Permissions permissions =
+                computePermissionsFromBlessings(getPersonalBlessings(getVContext()));
 
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
 
@@ -168,46 +173,47 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                 "TODOs User Data Collection", permissions,
                 ImmutableList.of(new CollectionRow(id, "")),
                 ImmutableList.of(MOUNTPOINT), false);
-        return getDatabase().getSyncgroup(sgName).create(mVContext, spec, memberInfo);
+        return getDatabase().getSyncgroup(sgName).create(getVContext(), spec, memberInfo);
     }
 
     @Override
     public void deleteTodoList(String key) {
         MainListTracker tracker = mTaskTrackers.remove(key);
         if (tracker != null) {
-            trap(tracker.collection.destroy(mVContext));
+            trap(tracker.collection.destroy(getVContext()));
         }
     }
 
     @Override
     public void setCompletion(ListMetadata listMetadata, final boolean done) {
         final String listId = listMetadata.key;
-        trap(Batch.runInBatch(mVContext, getDatabase(), new BatchOptions(),
+        trap(Batch.runInBatch(getVContext(), getDatabase(), new BatchOptions(),
                 new Batch.BatchOperation() {
                     @Override
                     public ListenableFuture<Void> run(final BatchDatabase db) {
                         return sExecutor.submit(new Callable<Void>() {
                             @Override
                             public Void call() throws Exception {
-                                final Collection list = db.getCollection(mVContext, listId);
+                                final Collection list = db.getCollection(getVContext(), listId);
 
-                                InputChannel<KeyValue> scan = list.scan(mVContext,
+                                InputChannel<KeyValue> scan = list.scan(getVContext(),
                                         RowRange.prefix(SyncbaseTodoList.TASKS_PREFIX));
 
                                 List<ListenableFuture<Void>> puts = new ArrayList<>();
 
                                 for (KeyValue kv : InputChannels.asIterable(scan)) {
-                                    TaskSpec taskSpec = (TaskSpec) VomUtil.decode(kv.getValue(),
+                                    TaskSpec taskSpec = castFromSyncbase(kv.getValue().getElem(),
                                             TaskSpec.class);
                                     if (taskSpec.getDone() != done) {
                                         taskSpec.setDone(done);
-                                        puts.add(list.put(mVContext, kv.getKey(), taskSpec,
+                                        puts.add(list.put(getVContext(), kv.getKey(), taskSpec,
                                                 TaskSpec.class));
                                     }
                                 }
 
                                 if (!puts.isEmpty()) {
-                                    puts.add(SyncbaseTodoList.updateListTimestamp(mVContext, list));
+                                    puts.add(SyncbaseTodoList.updateListTimestamp(
+                                            getVContext(), list));
                                 }
                                 VFutures.sync(Futures.allAsList(puts));
                                 return null;
