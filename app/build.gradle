@@ -41,6 +41,10 @@ android {
     }
 }
 
+repositories {
+    mavenLocal()
+}
+
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     testCompile 'junit:junit:4.12'
@@ -75,5 +79,5 @@ dependencies {
             'com.google.guava:guava:19.0'
     )
     firebaseCompile 'com.firebase:firebase-client-android:2.5.2'
-    syncbaseCompile 'io.v:vanadium-android:2.0'
+    syncbaseCompile 'io.v:vanadium-android:2.+'
 }

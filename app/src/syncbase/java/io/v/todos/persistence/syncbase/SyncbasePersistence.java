@@ -33,6 +33,8 @@ import io.v.android.v23.V;
 import io.v.impl.google.services.syncbase.SyncbaseServer;
 import io.v.todos.R;
 import io.v.todos.persistence.Persistence;
+import io.v.v23.OptionDefs;
+import io.v.v23.Options;
 import io.v.v23.VFutures;
 import io.v.v23.context.VContext;
 import io.v.v23.rpc.Server;
@@ -41,15 +43,21 @@ import io.v.v23.security.Blessings;
 import io.v.v23.security.access.AccessList;
 import io.v.v23.security.access.Constants;
 import io.v.v23.security.access.Permissions;
+import io.v.v23.services.syncbase.CollectionRow;
+import io.v.v23.services.syncbase.SyncgroupJoinFailedException;
+import io.v.v23.services.syncbase.SyncgroupMemberInfo;
+import io.v.v23.services.syncbase.SyncgroupSpec;
 import io.v.v23.syncbase.Collection;
 import io.v.v23.syncbase.Database;
 import io.v.v23.syncbase.Syncbase;
 import io.v.v23.syncbase.SyncbaseService;
+import io.v.v23.syncbase.Syncgroup;
 import io.v.v23.vdl.VdlStruct;
 import io.v.v23.verror.CanceledException;
 import io.v.v23.verror.ExistException;
 import io.v.v23.verror.VException;
 import io.v.v23.vom.VomUtil;
+import io.v.x.ref.lib.discovery.BadAdvertisementException;
 
 /**
  * TODO(rosswang): Move most of this to vanadium-android.
@@ -60,9 +68,15 @@ public class SyncbasePersistence implements Persistence {
             FILENAME = "syncbase",
             PROXY = "proxy",
             DATABASE = "db",
-            BLESSINGS_KEY = "blessings";
+            BLESSINGS_KEY = "blessings",
+            USER_COLLECTION_SYNCGROUP_SUFFIX = "/%%sync/sg_",
+            LIST_COLLECTION_SYNCGROUP_SUFFIX = "/%%sync/list_",
+    // TODO(alexfandrianto): This shouldn't be me running the cloud.
+    CLOUD_BLESSING = "dev.v.io:u:alexfandrianto@google.com";
     public static final String
-            USER_COLLECTION_NAME = "userdata";
+            USER_COLLECTION_NAME = "userdata",
+            MOUNTPOINT = "/ns.dev.v.io:8101/tmp/todos/users/",
+            CLOUD_NAME = MOUNTPOINT + "cloud";
     // BlessingPattern initialization has to be deferred until after V23 init due to native binding.
     private static final Supplier<AccessList> OPEN_ACL = Suppliers.memoize(
             new Supplier<AccessList>() {
@@ -93,10 +107,12 @@ public class SyncbasePersistence implements Persistence {
         storageRoot.mkdirs();
 
         Log.i(TAG, "Starting Syncbase");
-        VContext serverContext = SyncbaseServer.withNewServer(vContext,
-                new SyncbaseServer.Params()
-                        .withPermissions(serverPermissions)
-                        .withStorageRootDir(storageRoot.getAbsolutePath()));
+        SyncbaseServer.Params params = new SyncbaseServer.Params()
+                .withPermissions(serverPermissions)
+                .withStorageRootDir(storageRoot.getAbsolutePath());
+
+
+        VContext serverContext = SyncbaseServer.withNewServer(vContext, params);
 
         Server server = V.getServer(serverContext);
         return "/" + server.getStatus().getEndpoints()[0];
@@ -115,24 +131,18 @@ public class SyncbasePersistence implements Persistence {
         synchronized (sSyncbaseMutex) {
             if (sSyncbase == null) {
                 final Context appContext = androidContext.getApplicationContext();
-                VContext singletonContext = V.init(appContext);
+                VContext singletonContext = V.init(appContext, new Options()
+                        .set(OptionDefs.LOG_VLEVEL, 0)
+                        .set(OptionDefs.LOG_VMODULE, "vsync*=0"));
+
                 try {
-                    Blessings clientBlessings = V.getPrincipal(singletonContext)
-                            .blessingStore().defaultBlessings();
-                    if (clientBlessings == null) {
+                    // Retrieve this context's personal permissions to set ACLs on the server.
+                    Blessings personalBlessings = getPersonalBlessings(singletonContext);
+                    if (personalBlessings == null) {
                         throw new IllegalStateException("Blessings must be attached to the " +
                                 "Vanadium principal before Syncbase initialization.");
                     }
-
-                    AccessList clientAcl = new AccessList(ImmutableList.of(
-                            new BlessingPattern(clientBlessings.toString())),
-                            ImmutableList.<String>of());
-
-                    Permissions permissions = new Permissions(ImmutableMap.of(
-                            Constants.RESOLVE.getValue(), OPEN_ACL.get(),
-                            Constants.READ.getValue(), clientAcl,
-                            Constants.WRITE.getValue(), clientAcl,
-                            Constants.ADMIN.getValue(), clientAcl));
+                    Permissions permissions = computePermissionsFromBlessings(personalBlessings);
 
                     sSyncbase = Syncbase.newService(startSyncbaseServer(
                             singletonContext, appContext, permissions));
@@ -143,6 +153,22 @@ public class SyncbasePersistence implements Persistence {
                 sVContext = singletonContext;
             }
         }
+    }
+
+    protected static Blessings getPersonalBlessings(VContext ctx) {
+        return V.getPrincipal(ctx).blessingStore().defaultBlessings();
+    }
+
+    protected static Permissions computePermissionsFromBlessings(Blessings blessings) {
+        AccessList clientAcl = new AccessList(ImmutableList.of(
+                new BlessingPattern(blessings.toString()), new BlessingPattern(CLOUD_BLESSING)),
+                ImmutableList.<String>of());
+
+        return new Permissions(ImmutableMap.of(
+                Constants.RESOLVE.getValue(), OPEN_ACL.get(),
+                Constants.READ.getValue(), clientAcl,
+                Constants.WRITE.getValue(), clientAcl,
+                Constants.ADMIN.getValue(), clientAcl));
     }
 
     private static final Object sDatabaseMutex = new Object();
@@ -181,8 +207,86 @@ public class SyncbasePersistence implements Persistence {
         }
     }
 
+    private static final Object sCloudDatabaseMutex = new Object();
+    private static volatile Database sCloudDatabase;
+
+    private static void ensureCloudDatabaseExists() {
+        synchronized (sCloudDatabaseMutex) {
+            if (sCloudDatabase == null) {
+                SyncbaseService cloudService = Syncbase.newService(CLOUD_NAME);
+                Database db = cloudService.getDatabase(sVContext, DATABASE, null);
+                try {
+                    VFutures.sync(db.create(sVContext, null));
+                } catch (ExistException e) {
+                    // This is acceptable. No need to do it again.
+                } catch (Exception e) {
+                    Log.w(TAG, "Could not ensure cloud database exists: " + e.getMessage());
+                }
+                sCloudDatabase = db;
+            }
+        }
+    }
+
+    private static final Object sUserSyncgroupMutex = new Object();
+    private static volatile Syncgroup sUserSyncgroup;
+
+    private static void ensureUserSyncgroupExists() throws VException {
+        synchronized (sUserSyncgroupMutex) {
+            if (sUserSyncgroup == null) {
+                Blessings clientBlessings = getPersonalBlessings(sVContext);
+                String[] split = clientBlessings.toString().split(":");
+                String email = split[split.length - 1];
+                Log.d(TAG, email);
+
+                Permissions permissions = computePermissionsFromBlessings(clientBlessings);
+
+                String sgName = CLOUD_NAME + USER_COLLECTION_SYNCGROUP_SUFFIX + email;
+
+                final SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
+                final Syncgroup sgHandle = sDatabase.getSyncgroup(sgName);
+
+                try {
+                    Log.d(TAG, "Trying to join the syncgroup: " + sgName);
+                    VFutures.sync(sgHandle.join(sVContext, memberInfo));
+                    Log.d(TAG, "JOINED the syncgroup: " + sgName);
+                } catch (SyncgroupJoinFailedException e) {
+                    Log.w(TAG, "Failed join. Trying to create the syncgroup: " + sgName, e);
+                    SyncgroupSpec spec = new SyncgroupSpec(
+                            "TODOs User Data Collection", permissions,
+                            ImmutableList.of(new CollectionRow(sUserCollection.id(), "")),
+                            ImmutableList.of(MOUNTPOINT), false);
+                    try {
+                        VFutures.sync(sgHandle.create(sVContext, spec, memberInfo));
+                    } catch (BadAdvertisementException e2) {
+                        Log.d(TAG, "Bad advertisement exception. Can we fix this?");
+                    }
+                    Log.d(TAG, "CREATED the syncgroup: " + sgName);
+                } catch (Exception e) {
+                    Log.d(TAG, "Failed to join or create the syncgroup: " + sgName);
+                    if (!(e instanceof BadAdvertisementException)) { // joined, I guess
+                        throw e;
+                    }
+                }
+                sUserSyncgroup = sgHandle;
+            }
+        }
+    }
+
+    protected static SyncgroupMemberInfo getDefaultMemberInfo() {
+        SyncgroupMemberInfo memberInfo = new SyncgroupMemberInfo();
+        memberInfo.setSyncPriority((byte) 3);
+        return memberInfo;
+
+    }
+
+    protected String computeListSyncgroupName(String listId) {
+        return CLOUD_NAME + LIST_COLLECTION_SYNCGROUP_SUFFIX + listId;
+    }
+
+    private static volatile boolean sInitialized;
+
     public static boolean isInitialized() {
-        return sUserCollection != null;
+        return sInitialized;
     }
 
     /**
@@ -205,7 +309,7 @@ public class SyncbasePersistence implements Persistence {
 
         @Override
         public void onFailure(@NonNull Throwable t) {
-            if (!(t instanceof CanceledException)) {
+            if (!(t instanceof CanceledException || t instanceof ExistException)) {
                 Toast.makeText(mAndroidContext, R.string.err_sync, Toast.LENGTH_LONG).show();
                 StringBuilder traceBuilder = new StringBuilder(Throwables.getStackTraceAsString(t))
                         .append("\n invoked at ").append(mCaller[FIRST_SIGNIFICANT_STACK_ELEMENT]);
@@ -220,10 +324,9 @@ public class SyncbasePersistence implements Persistence {
     /**
      * Extracts the value from a watch change.
      * TODO(rosswang): This method is a tempory hack, awaiting resolution of the following issues:
-     *
      * <ul>
-     *  <li><a href="https://github.com/vanadium/issues/issues/1305">#1305</a>
-     *  <li><a href="https://github.com/vanadium/issues/issues/1310">#1310</a>
+     * <li><a href="https://github.com/vanadium/issues/issues/1305">#1305</a>
+     * <li><a href="https://github.com/vanadium/issues/issues/1310">#1310</a>
      * </ul>
      */
     @SuppressWarnings("unchecked")
@@ -264,7 +367,9 @@ public class SyncbasePersistence implements Persistence {
     public SyncbasePersistence(final Activity activity)
             throws VException, SyncbaseServer.StartException {
         mActivity = activity;
-        mVContext = V.init(activity);
+        mVContext = V.init(activity, new Options()
+                .set(OptionDefs.LOG_VLEVEL, 0)
+                .set(OptionDefs.LOG_VMODULE, "vsync*=0"));
 
         // We might not actually have to seek blessings each time, but getBlessings does not
         // block if we already have blessings and this has better-behaved lifecycle
@@ -285,6 +390,9 @@ public class SyncbasePersistence implements Persistence {
         ensureSyncbaseStarted(activity);
         ensureDatabaseExists();
         ensureUserCollectionExists();
+        ensureCloudDatabaseExists();
+        ensureUserSyncgroupExists();
+        sInitialized = true;
     }
 
     @Override
