@@ -9,9 +9,14 @@ import android.os.Bundle;
 import android.support.annotation.VisibleForTesting;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 import io.v.todos.model.DataList;
 import io.v.todos.model.ListSpec;
@@ -23,7 +28,7 @@ import io.v.todos.persistence.TodoListPersistence;
 
 /**
  * TodoListActivity for Vanadium TODOs
- *
+ * <p/>
  * This activity shows a list of tasks.
  * - Tap on a Task in order to edit it.
  * - Swipe Left on a Task to delete it.
@@ -35,6 +40,7 @@ import io.v.todos.persistence.TodoListPersistence;
  */
 public class TodoListActivity extends TodosAppActivity<TodoListPersistence, TaskRecyclerAdapter> {
     private ListSpec snackoo;
+    private List<String> mSharedTo = new ArrayList<>();
     private DataList<Task> snackoosList = new DataList<>();
 
     // The menu item that toggles whether done items are shown or not.
@@ -57,13 +63,14 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
             }
         });
 
-        RecyclerView recyclerView = (RecyclerView)findViewById(R.id.recycler);
+        RecyclerView recyclerView = (RecyclerView) findViewById(R.id.recycler);
         recyclerView.setAdapter(mAdapter);
+        recyclerView.setHasFixedSize(true);
 
         new ItemTouchHelper(new SwipeableTouchHelperCallback() {
             @Override
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
-                String fbKey = (String)viewHolder.itemView.getTag();
+                String fbKey = (String) viewHolder.itemView.getTag();
                 if (direction == ItemTouchHelper.RIGHT) {
                     mPersistence.updateTask(snackoosList.findByKey(fbKey).withToggleDone());
                 } else if (direction == ItemTouchHelper.LEFT) {
@@ -121,6 +128,11 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
             }
 
             @Override
+            public void onShareChanged(List<String> sharedTo) {
+                mSharedTo = sharedTo;
+            }
+
+            @Override
             public void onItemAdd(Task item) {
                 int position = snackoosList.insertInOrder(item);
                 mAdapter.notifyItemInserted(position);
@@ -157,31 +169,31 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
     private void initiateTaskEdit(final String fbKey) {
         UIUtil.showEditDialog(this, "Editing Task", snackoosList.findByKey(fbKey).text,
                 new UIUtil.DialogResponseListener() {
-            @Override
-            public void handleResponse(String response) {
-                mPersistence.updateTask(snackoosList.findByKey(fbKey).withText(response));
-            }
+                    @Override
+                    public void handleResponse(String response) {
+                        mPersistence.updateTask(snackoosList.findByKey(fbKey).withText(response));
+                    }
 
-            @Override
-            public void handleDelete() {
-                mPersistence.deleteTask(fbKey);
-            }
-        });
+                    @Override
+                    public void handleDelete() {
+                        mPersistence.deleteTask(fbKey);
+                    }
+                });
     }
 
     private void initiateTodoListEdit() {
         UIUtil.showEditDialog(this, "Editing Todo List", snackoo.getName(),
                 new UIUtil.DialogResponseListener() {
-            @Override
-            public void handleResponse(String response) {
-                mPersistence.updateTodoList(new ListSpec(response));
-            }
+                    @Override
+                    public void handleResponse(String response) {
+                        mPersistence.updateTodoList(new ListSpec(response));
+                    }
 
-            @Override
-            public void handleDelete() {
-                mPersistence.deleteTodoList();
-            }
-        });
+                    @Override
+                    public void handleDelete() {
+                        mPersistence.deleteTodoList();
+                    }
+                });
     }
 
     // The following methods are boilerplate for handling the Menu in the top right corner.
@@ -216,6 +228,27 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
                 initiateTodoListEdit();
                 return true;
             case R.id.action_share:
+                // TODO(alexfandrianto): We should figure out who is near us.
+                List<String> fakeNearby = new ArrayList<>();
+
+                // TODO(alexfandrianto): mSharedTo will not be live-updated, so the dialog can show
+                // stale shares. Perhaps this dialog should return a notifier object.
+                UIUtil.showShareDialog(this, mSharedTo, fakeNearby,
+                        new UIUtil.ShareDialogResponseListener() {
+                            @Override
+                            public void handleShareChanges(Set<String> emailsAdded, Set<String>
+                                    emailsRemoved) {
+                                Log.d("SHARE COMPLETE!", emailsAdded.toString() + emailsRemoved
+                                        .toString());
+                                if (emailsAdded.size() > 0) {
+                                    mPersistence.shareTodoList(emailsAdded);
+                                    // TODO(alexfandrianto): We may need to advertise this somehow.
+                                }
+                                // TODO(alexfandrianto): We can't actually handle removing
+                                // members yet, so it may be better to hide the ability to remove in
+                                // the share dialog.
+                            }
+                        });
                 return true;
         }
 

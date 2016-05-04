@@ -76,6 +76,10 @@ public final class PersistenceFactory {
         }
 
         @Override
+        public void shareTodoList(Iterable<String> emails) {
+        }
+
+        @Override
         public void addTask(TaskSpec task) {
         }
 

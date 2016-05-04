@@ -10,6 +10,10 @@
     <string name="no_lists">No todo lists.\nPress \'+\' to add lists.</string>
     <string name="no_tasks">No tasks.\nPress \'+\' to add tasks.</string>
     <string name="just_now">Just now</string>
+    <!-- For Sharing Menu -->
+    <string name="sharing_already">Sharing With</string>
+    <string name="sharing_possible">Nearby</string>
+    <string name="sharing_custom_hint">Add an email address...</string>
     <!-- Errors -->
     <string name="err_init">Unable to initialize persistence</string>
     <string name="err_sync">Unable to sync</string>

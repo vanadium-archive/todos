@@ -6,13 +6,21 @@ package io.v.todos.persistence.syncbase;
 
 import android.app.Activity;
 import android.support.annotation.NonNull;
+import android.util.Log;
 
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import javax.annotation.Nullable;
 
 import io.v.impl.google.services.syncbase.SyncbaseServer;
 import io.v.todos.model.ListSpec;
@@ -24,24 +32,36 @@ import io.v.v23.InputChannel;
 import io.v.v23.InputChannelCallback;
 import io.v.v23.InputChannels;
 import io.v.v23.context.VContext;
+import io.v.v23.security.BlessingPattern;
+import io.v.v23.security.access.AccessList;
+import io.v.v23.security.access.Constants;
+import io.v.v23.security.access.Permissions;
+import io.v.v23.services.syncbase.SyncgroupSpec;
 import io.v.v23.syncbase.ChangeType;
 import io.v.v23.syncbase.Collection;
+import io.v.v23.syncbase.Syncgroup;
 import io.v.v23.syncbase.WatchChange;
 import io.v.v23.verror.NoExistException;
 import io.v.v23.verror.VException;
 
 public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPersistence {
     public static final String
+            TAG = "SyncbaseTodoList",
             LIST_METADATA_ROW_NAME = "list",
             TASKS_PREFIX = "tasks_";
 
     private static final String
             SHOW_DONE_ROW_NAME = "ShowDone";
 
+    private static final long
+            MEMBER_TIMER_DELAY = 100,
+            MEMBER_TIMER_PERIOD = 5000;
+
     private final Collection mList;
     private final TodoListListener mListener;
     private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.ROW_NAME, true);
     private final Set<String> mTaskIds = new HashSet<>();
+    private final Timer mMemberTimer;
 
     /**
      * This assumes that the collection for this list already exists.
@@ -73,6 +93,45 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
             }
         });
 
+        final Syncgroup sgHandle = getListSyncgroup();
+        mMemberTimer = new Timer();
+        mMemberTimer.scheduleAtFixedRate(new TimerTask() {
+            private SyncgroupSpec lastSpec;
+
+            @Override
+            public void run() {
+                // Get the Syncgroup Spec
+                Futures.addCallback(sgHandle.getSpec(mVContext), new TrappingCallback<Map<String,
+                        SyncgroupSpec>>(mActivity) {
+                    @Override
+                    public void onSuccess(Map<String, SyncgroupSpec> specMap) {
+                        String version = specMap.keySet().iterator().next(); // exactly one key
+                        SyncgroupSpec spec = specMap.get(version);
+
+                        if (spec.equals(lastSpec)) {
+                            return; // no changes, so no event should fire.
+                        }
+                        lastSpec = spec;
+
+                        // Get the list of patterns that can read from the spec.
+                        Permissions perms = spec.getPerms();
+                        AccessList acl = perms.get(Constants.READ.getValue());
+                        List<BlessingPattern> patterns = acl.getIn();
+
+                        // Analyze these patterns to construct the emails, and fire the listener!
+                        List<String> emails = parseEmailsFromPatterns(patterns);
+                        mListener.onShareChanged(emails);
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Throwable t) {
+                        Log.w(TAG, "Failed to get syncgroup spec for list: " + mList.id().getName(),
+                                t);
+                    }
+                });
+            }
+        }, MEMBER_TIMER_DELAY, MEMBER_TIMER_PERIOD);
+
         // Watch the "showDone" boolean in the userdata collection and forward changes to the
         // listener.
         InputChannel<WatchChange> showDoneWatch = getDatabase()
@@ -80,10 +139,33 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
         trap(InputChannels.withCallback(showDoneWatch, new InputChannelCallback<WatchChange>() {
             @Override
             public ListenableFuture<Void> onNext(WatchChange result) {
-                mListener.onUpdateShowDone((boolean)result.getValue());
+                mListener.onUpdateShowDone((boolean) result.getValue());
                 return null;
             }
         }));
+    }
+
+    protected List<String> parseEmailsFromPatterns(List<BlessingPattern> patterns) {
+        List<String> emails = new ArrayList<>();
+
+        for (BlessingPattern pattern : patterns) {
+            if (pattern.isMatchedBy(CLOUD_BLESSING)) {
+                // Skip. It's the cloud, and that doesn't count.
+                continue;
+            }
+            if (pattern.toString().endsWith(getPersonalEmail(mVContext))) {
+                // Skip. It's you, and that doesn't count.
+                continue;
+            }
+            emails.add(getEmailFromPattern(pattern));
+        }
+        return emails;
+    }
+
+    @Override
+    public void close() {
+        mMemberTimer.cancel();
+        super.close();
     }
 
     private void processWatchChange(WatchChange change) {
@@ -120,6 +202,75 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     public void deleteTodoList() {
         trap(getUserCollection().delete(mVContext, mList.id().getName()));
         trap(mList.destroy(mVContext));
+    }
+
+    private Syncgroup getListSyncgroup() {
+        return getDatabase().getSyncgroup(computeListSyncgroupName(mList.id().getName()));
+    }
+
+    @Override
+    public void shareTodoList(final Iterable<String> emails) {
+        // Get the syncgroup
+        final Syncgroup sgHandle = getListSyncgroup();
+
+        // Get the Syncgroup Spec and add read access. Then get the collection permissions and add
+        // both read and write access. Along the way, trigger the listener's onShareChanged.
+        trap(Futures.transformAsync(sgHandle.getSpec(mVContext), new AsyncFunction<Map<String,
+                SyncgroupSpec>, Void>() {
+            @Override
+            public ListenableFuture<Void> apply(@Nullable Map<String, SyncgroupSpec> specMap)
+                    throws Exception {
+                String version = specMap.keySet().iterator().next(); // exactly one key
+                SyncgroupSpec spec = specMap.get(version);
+
+                // Modify the syncgroup spec to update the permissions.
+                final Permissions perms = spec.getPerms();
+                addPermissions(perms, emails, Constants.READ.getValue());
+                return Futures.transformAsync(sgHandle.setSpec(mVContext, spec, version), new
+                        AsyncFunction<Void, Void>() {
+                            @Override
+                            public ListenableFuture<Void> apply(@Nullable Void input) throws
+                                    Exception {
+                                // TODO(alexfandrianto): This should be the right place to send
+                                // the invite explicitly to the selected emails.
+
+                                // Analyze these patterns to construct the emails, and fire the
+                                // listener!
+                                List<String> specEmails = parseEmailsFromPatterns(perms.get
+                                        (Constants
+                                                .READ.getValue()).getIn());
+                                mListener.onShareChanged(specEmails);
+
+                                // Add read and write access to the collection permissions.
+                                return Futures.transformAsync(mList.getPermissions(mVContext), new
+                                        AsyncFunction<Permissions, Void>() {
+
+                                            @Override
+                                            public ListenableFuture<Void> apply(@Nullable
+                                                                                Permissions input)
+                                                    throws Exception {
+                                                addPermissions(perms, emails, Constants.READ
+                                                        .getValue());
+                                                addPermissions(perms, emails, Constants.WRITE
+                                                        .getValue());
+                                                return mList.setPermissions(mVContext, perms);
+                                            }
+                                        });
+                            }
+                        });
+            }
+        }));
+    }
+
+    // TODO(alexfandrianto): We should consider moving this helper into the main Java repo.
+    // https://github.com/vanadium/issues/issues/1321
+    private static void addPermissions(Permissions perms, Iterable<String> emails, String tag) {
+        AccessList acl = perms.get(tag);
+        List<BlessingPattern> patterns = acl.getIn();
+        for (String email : emails) {
+            patterns.add(new BlessingPattern(blessingsStringFromEmail(email)));
+        }
+        perms.put(tag, acl);
     }
 
     public static ListenableFuture<Void> updateListTimestamp(final VContext vContext,

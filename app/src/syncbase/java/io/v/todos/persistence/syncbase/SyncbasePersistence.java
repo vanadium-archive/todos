@@ -71,12 +71,15 @@ public class SyncbasePersistence implements Persistence {
             BLESSINGS_KEY = "blessings",
             USER_COLLECTION_SYNCGROUP_SUFFIX = "/%%sync/sg_",
             LIST_COLLECTION_SYNCGROUP_SUFFIX = "/%%sync/list_",
-    // TODO(alexfandrianto): This shouldn't be me running the cloud.
-    CLOUD_BLESSING = "dev.v.io:u:alexfandrianto@google.com";
+            DEFAULT_BLESSING_STRING = "dev.v.io:o:608941808256-43vtfndets79kf5hac8ieujto8837660" +
+                    ".apps.googleusercontent.com:";
     public static final String
             USER_COLLECTION_NAME = "userdata",
             MOUNTPOINT = "/ns.dev.v.io:8101/tmp/todos/users/",
             CLOUD_NAME = MOUNTPOINT + "cloud";
+
+    // TODO(alexfandrianto): This shouldn't be me running the cloud.
+    public static final String CLOUD_BLESSING = "dev.v.io:u:alexfandrianto@google.com";
     // BlessingPattern initialization has to be deferred until after V23 init due to native binding.
     private static final Supplier<AccessList> OPEN_ACL = Suppliers.memoize(
             new Supplier<AccessList>() {
@@ -122,12 +125,16 @@ public class SyncbasePersistence implements Persistence {
      * Ensures that Syncbase is running. This should not be called until after the Vanadium
      * principal has assumed blessings. The Syncbase server will run until the process is killed.
      *
-     * @throws IllegalStateException if blessings were not attached to the principal beforehand
+     * @throws IllegalStateException                                            if blessings were
+     *                                                                          not attached to
+     *                                                                          the principal
+     *                                                                          beforehand
      * @throws io.v.impl.google.services.syncbase.SyncbaseServer.StartException if there was an
-     * error starting the syncbase service
+     *                                                                          error starting
+     *                                                                          the syncbase service
      */
     private static void ensureSyncbaseStarted(Context androidContext)
-            throws SyncbaseServer.StartException {
+            throws SyncbaseServer.StartException, VException {
         synchronized (sSyncbaseMutex) {
             if (sSyncbase == null) {
                 final Context appContext = androidContext.getApplicationContext();
@@ -157,6 +164,26 @@ public class SyncbasePersistence implements Persistence {
 
     protected static Blessings getPersonalBlessings(VContext ctx) {
         return V.getPrincipal(ctx).blessingStore().defaultBlessings();
+    }
+
+    protected static String getEmailFromBlessings(Blessings blessings) {
+        String[] split = blessings.toString().split(":");
+        return split[split.length - 1];
+    }
+
+    protected static String getEmailFromPattern(BlessingPattern pattern) {
+        String[] split = pattern.toString().split(":");
+        return split[split.length - 1];
+    }
+
+    protected static String getPersonalEmail(VContext ctx) {
+        return getEmailFromBlessings(getPersonalBlessings(ctx));
+    }
+
+    protected static String blessingsStringFromEmail(String email) {
+        // TODO(alexfandrianto): We may need a more sophisticated method for producing this
+        // blessings string. Currently, the app's id is fixed to the anonymous Android app.
+        return DEFAULT_BLESSING_STRING + email;
     }
 
     protected static Permissions computePermissionsFromBlessings(Blessings blessings) {
@@ -210,6 +237,7 @@ public class SyncbasePersistence implements Persistence {
     private static final Object sCloudDatabaseMutex = new Object();
     private static volatile Database sCloudDatabase;
 
+
     private static void ensureCloudDatabaseExists() {
         synchronized (sCloudDatabaseMutex) {
             if (sCloudDatabase == null) {
@@ -234,8 +262,7 @@ public class SyncbasePersistence implements Persistence {
         synchronized (sUserSyncgroupMutex) {
             if (sUserSyncgroup == null) {
                 Blessings clientBlessings = getPersonalBlessings(sVContext);
-                String[] split = clientBlessings.toString().split(":");
-                String email = split[split.length - 1];
+                String email = getEmailFromBlessings(clientBlessings);
                 Log.d(TAG, email);
 
                 Permissions permissions = computePermissionsFromBlessings(clientBlessings);
@@ -323,7 +350,7 @@ public class SyncbasePersistence implements Persistence {
 
     /**
      * Extracts the value from a watch change.
-     * TODO(rosswang): This method is a tempory hack, awaiting resolution of the following issues:
+     * TODO(rosswang): This method is a temporary hack, awaiting resolution of the following issues:
      * <ul>
      * <li><a href="https://github.com/vanadium/issues/issues/1305">#1305</a>
      * <li><a href="https://github.com/vanadium/issues/issues/1310">#1310</a>

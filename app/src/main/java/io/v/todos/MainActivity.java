@@ -13,6 +13,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 
+import java.util.List;
+
 import io.v.todos.model.DataList;
 import io.v.todos.model.ListMetadata;
 import io.v.todos.model.ListSpec;
@@ -59,6 +61,7 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
 
         mRecyclerView = (RecyclerView)findViewById(R.id.recycler);
         mRecyclerView.setAdapter(mAdapter);
+        mRecyclerView.setHasFixedSize(true);
 
         new ItemTouchHelper(new SwipeableTouchHelperCallback() {
             @Override
@@ -102,49 +105,49 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
     @VisibleForTesting
     ListEventListener<ListMetadata> createMainListener() {
         return new ListEventListener<ListMetadata>() {
-                    @Override
-                    public void onItemAdd(ListMetadata item) {
-                        int position = mMainList.insertInOrder(item);
+            @Override
+            public void onItemAdd(ListMetadata item) {
+                int position = mMainList.insertInOrder(item);
 
-                        mAdapter.notifyItemInserted(position);
-                        setEmptyVisiblity();
-                    }
+                mAdapter.notifyItemInserted(position);
+                setEmptyVisiblity();
+            }
 
-                    @Override
-                    public void onItemUpdate(final ListMetadata item) {
-                        int start = mMainList.findIndexByKey(item.key);
-                        int end = mMainList.updateInOrder(item);
+            @Override
+            public void onItemUpdate(final ListMetadata item) {
+                int start = mMainList.findIndexByKey(item.key);
+                int end = mMainList.updateInOrder(item);
 
-                        if (start != end) {
-                            mAdapter.notifyItemMoved(start, end);
-                        }
+                if (start != end) {
+                    mAdapter.notifyItemMoved(start, end);
+                }
 
-                        // The change animation involves a cross-fade that, if interrupted
-                        // while another for the same item is already in progress, interacts
-                        // badly with ItemTouchHelper's swipe animator. The effect would be
-                        // a flicker of the intermediate ListMetadata view, then it fading
-                        // out to the latest view but X-translated off the screen due to the
-                        // swipe animator.
-                        //
-                        // We could queue up the next change after the current one, but it's
-                        // probably better just to rebind.
-                        TodoListViewHolder vh = (TodoListViewHolder) mRecyclerView
-                                .findViewHolderForAdapterPosition(end);
-                        if (vh.itemView.getAlpha() < 1) {
-                            mAdapter.bindViewHolder(vh, end);
-                        } else {
-                            mAdapter.notifyItemChanged(end);
-                        }
-                    }
+                // The change animation involves a cross-fade that, if interrupted
+                // while another for the same item is already in progress, interacts
+                // badly with ItemTouchHelper's swipe animator. The effect would be
+                // a flicker of the intermediate ListMetadata view, then it fading
+                // out to the latest view but X-translated off the screen due to the
+                // swipe animator.
+                //
+                // We could queue up the next change after the current one, but it's
+                // probably better just to rebind.
+                TodoListViewHolder vh = (TodoListViewHolder) mRecyclerView
+                        .findViewHolderForAdapterPosition(end);
+                if (vh.itemView.getAlpha() < 1) {
+                    mAdapter.bindViewHolder(vh, end);
+                } else {
+                    mAdapter.notifyItemChanged(end);
+                }
+            }
 
-                    @Override
-                    public void onItemDelete(String key) {
-                        int position = mMainList.removeByKey(key);
+            @Override
+            public void onItemDelete(String key) {
+                int position = mMainList.removeByKey(key);
 
-                        mAdapter.notifyItemRemoved(position);
-                        setEmptyVisiblity();
-                    }
-                };
+                mAdapter.notifyItemRemoved(position);
+                setEmptyVisiblity();
+            }
+        };
     }
 
     public void initiateItemAdd(View view) {

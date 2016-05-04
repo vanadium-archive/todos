@@ -102,9 +102,6 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                         }
                     });
 
-
-
-
                     MainListTracker listTracker = new MainListTracker(
                             mVContext, getDatabase(), listId, listener);
                     if (mTaskTrackers.put(listId, listTracker) != null) {

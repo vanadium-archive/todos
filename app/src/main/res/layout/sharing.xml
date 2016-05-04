@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical" android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:textStyle="bold"
+        android:textSize="22sp"
+        android:textColor="#000000"
+        android:layout_margin="5dp"
+        android:text="@string/sharing_already" />
+
+    <android.support.v7.widget.RecyclerView android:id="@+id/recycler_already"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        app:layoutManager="LinearLayoutManager" />
+
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:textStyle="bold"
+        android:textSize="22sp"
+        android:textColor="#000000"
+        android:layout_margin="5dp"
+        android:text="@string/sharing_possible" />
+
+    <android.support.v7.widget.RecyclerView android:id="@+id/recycler_possible"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        app:layoutManager="LinearLayoutManager" />
+
+    <EditText android:id="@+id/custom_email"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:textStyle="bold"
+        android:textSize="22sp"
+        android:textColor="#000000"
+        android:hint="@string/sharing_custom_hint"
+        android:layout_margin="5dp"
+        android:inputType="text"
+        android:imeOptions="actionSend" />
+
+</LinearLayout>

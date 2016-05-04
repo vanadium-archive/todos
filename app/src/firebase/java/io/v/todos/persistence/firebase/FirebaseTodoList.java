@@ -84,6 +84,11 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
         mTodoList.removeValue();
     }
 
+    @Override
+    public void shareTodoList(Iterable<String> emails) {
+        // Not implemented.
+    }
+
     private void updateListTimestamp() {
         mListSpec.setUpdatedAt(System.currentTimeMillis());
         mTodoList.setValue(mListSpec);
