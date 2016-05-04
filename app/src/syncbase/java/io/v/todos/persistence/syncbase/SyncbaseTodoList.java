@@ -9,7 +9,6 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.util.Log;
 
-import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
@@ -22,8 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
-
-import javax.annotation.Nullable;
+import java.util.concurrent.Callable;
 
 import io.v.impl.google.services.syncbase.SyncbaseServer;
 import io.v.todos.model.ListSpec;
@@ -34,6 +32,7 @@ import io.v.todos.persistence.TodoListPersistence;
 import io.v.v23.InputChannel;
 import io.v.v23.InputChannelCallback;
 import io.v.v23.InputChannels;
+import io.v.v23.VFutures;
 import io.v.v23.context.VContext;
 import io.v.v23.security.BlessingPattern;
 import io.v.v23.security.access.AccessList;
@@ -104,35 +103,31 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
 
             @Override
             public void run() {
-                // Get the Syncgroup Spec
-                Futures.addCallback(sgHandle.getSpec(getVContext()),
-                        new TrappingCallback<Map<String, SyncgroupSpec>>(getErrorReporter()) {
-                            @Override
-                            public void onSuccess(Map<String, SyncgroupSpec> specMap) {
-                                String version = specMap.keySet().iterator().next(); // exactly one key
-                                SyncgroupSpec spec = specMap.get(version);
+                Map<String, SyncgroupSpec> specMap;
+                try {
+                    // Ok to block; we don't want to try parallel polls.
+                    specMap = VFutures.sync(sgHandle.getSpec(getVContext()));
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to get syncgroup spec for list: " + mList.id().getName(), e);
+                    return;
+                }
 
-                                if (spec.equals(lastSpec)) {
-                                    return; // no changes, so no event should fire.
-                                }
-                                lastSpec = spec;
+                String version = Iterables.getOnlyElement(specMap.keySet());
+                SyncgroupSpec spec = specMap.get(version);
 
-                                // Get the list of patterns that can read from the spec.
-                                Permissions perms = spec.getPerms();
-                                AccessList acl = perms.get(Constants.READ.getValue());
-                                List<BlessingPattern> patterns = acl.getIn();
+                if (spec.equals(lastSpec)) {
+                    return; // no changes, so no event should fire.
+                }
+                lastSpec = spec;
 
-                                // Analyze these patterns to construct the emails, and fire the listener!
-                                List<String> emails = parseEmailsFromPatterns(patterns);
-                                mListener.onShareChanged(emails);
-                            }
+                // Get the list of patterns that can read from the spec.
+                Permissions perms = spec.getPerms();
+                AccessList acl = perms.get(Constants.READ.getValue());
+                List<BlessingPattern> patterns = acl.getIn();
 
-                            @Override
-                            public void onFailure(@NonNull Throwable t) {
-                                Log.w(TAG, "Failed to get syncgroup spec for list: " + mList.id().getName(),
-                                        t);
-                            }
-                        });
+                // Analyze these patterns to construct the emails, and fire the listener!
+                List<String> emails = parseEmailsFromPatterns(patterns);
+                mListener.onShareChanged(emails);
             }
         }, MEMBER_TIMER_DELAY, MEMBER_TIMER_PERIOD);
 
@@ -220,52 +215,36 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
         // Get the Syncgroup Spec and add read access. Then get the collection permissions and add
         // both read and write access. Along the way, trigger the listener's onShareChanged.
 
-        ListenableFuture<Map<String, SyncgroupSpec>> getSpec = sgHandle.getSpec(getVContext());
-        ListenableFuture<Permissions> setSpec = Futures.transformAsync(getSpec,
-                new AsyncFunction<Map<String, SyncgroupSpec>, Permissions>() {
-                    @Override
-                    public ListenableFuture<Permissions> apply(Map<String, SyncgroupSpec> specMap) {
-                        String version = Iterables.getOnlyElement(specMap.keySet());
-                        SyncgroupSpec spec = specMap.get(version);
+        trap(sExecutor.submit(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                Map<String, SyncgroupSpec> specMap = VFutures.sync(sgHandle.getSpec(getVContext()));
 
-                        // Modify the syncgroup spec to update the permissions.
-                        final Permissions perms = spec.getPerms();
-                        addPermissions(perms, emails, Constants.READ.getValue());
-                        return Futures.transform(sgHandle.setSpec(getVContext(), spec, version),
-                                new Function<Void, Permissions>() {
-                                    @Override
-                                    public Permissions apply(@Nullable Void input) {
-                                        return perms;
-                                    }
-                                });
-                    }
-                });
-        ListenableFuture<Permissions> getPermissions = Futures.transformAsync(setSpec,
-                new AsyncFunction<Permissions, Permissions>() {
-                    @Override
-                    public ListenableFuture<Permissions> apply(Permissions perms) {
-                        // TODO(alexfandrianto): This should be the right place to send the invite
-                        // explicitly to the selected emails.
+                String version = Iterables.getOnlyElement(specMap.keySet());
+                SyncgroupSpec spec = specMap.get(version);
 
-                        // Analyze these patterns to construct the emails, and fire the listener!
-                        List<String> specEmails = parseEmailsFromPatterns(
-                                perms.get(Constants.READ.getValue()).getIn());
-                        mListener.onShareChanged(specEmails);
+                // Modify the syncgroup spec to update the permissions.
+                Permissions perms = spec.getPerms();
+                addPermissions(perms, emails, Constants.READ.getValue());
+                VFutures.sync(sgHandle.setSpec(getVContext(), spec, version));
 
-                        // Add read and write access to the collection permissions.
-                        return mList.getPermissions(getVContext());
-                    }
-                });
-        ListenableFuture<Void> setPermissions = Futures.transformAsync(getPermissions,
-                new AsyncFunction<Permissions, Void>() {
-                    @Override
-                    public ListenableFuture<Void> apply(@Nullable Permissions perms) {
-                        addPermissions(perms, emails, Constants.READ.getValue());
-                        addPermissions(perms, emails, Constants.WRITE.getValue());
-                        return mList.setPermissions(getVContext(), perms);
-                    }
-                });
-        trap(setPermissions);
+                // TODO(alexfandrianto): This should be the right place to send the invite
+                // explicitly to the selected emails.
+
+                // Analyze these patterns to construct the emails, and fire the listener!
+                List<String> specEmails = parseEmailsFromPatterns(
+                        perms.get(Constants.READ.getValue()).getIn());
+                mListener.onShareChanged(specEmails);
+
+                // Add read and write access to the collection permissions.
+                perms = VFutures.sync(mList.getPermissions(getVContext()));
+
+                addPermissions(perms, emails, Constants.READ.getValue());
+                addPermissions(perms, emails, Constants.WRITE.getValue());
+                VFutures.sync(mList.setPermissions(getVContext(), perms));
+                return null;
+            }
+        }));
     }
 
     // TODO(alexfandrianto): We should consider moving this helper into the main Java repo.
