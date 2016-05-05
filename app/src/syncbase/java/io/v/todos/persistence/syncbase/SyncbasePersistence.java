@@ -230,8 +230,21 @@ public class SyncbasePersistence implements Persistence {
     private static void ensureUserCollectionExists() throws VException {
         synchronized (sUserCollectionMutex) {
             if (sUserCollection == null) {
+                // The reason the following doesn't work yet is that collections cross-share.
+                // https://github.com/vanadium/issues/issues/1320
+                //Collection userCollection = sDatabase.getCollection(sVContext,
+                //        USER_COLLECTION_NAME);
+
+                // The reason the following workaround doesn't work is the blessing is too long.
+                // https://github.com/vanadium/issues/issues/1322
+                // Collection userCollection = sDatabase.getCollection(
+                //        new Id(getPersonalBlessings(sVContext).toString(), USER_COLLECTION_NAME));
+
+                // TODO(alexfandrianto): Replace this with one of the above solutions when possible.
+                // This solution is forced to use the email and replace invalid characters.
+                String email = getPersonalEmail(sVContext).replace(".", "_").replace("@", "_AT_");
                 Collection userCollection = sDatabase.getCollection(sVContext,
-                        USER_COLLECTION_NAME);
+                        USER_COLLECTION_NAME + "_" + email);
                 try {
                     VFutures.sync(userCollection.create(sVContext, null));
                 } catch (ExistException e) {
