@@ -7,11 +7,13 @@ package io.v.todos;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.VisibleForTesting;
 import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.widget.Toolbar;
 
 import io.v.todos.persistence.Persistence;
@@ -78,6 +80,25 @@ public class TodosAppActivity<P extends Persistence, A extends RecyclerView.Adap
                             mEmptyView.setVisibility(View.GONE);
                         }
                     });
+        }
+    }
+
+    /**
+     * Share debugging information for the persistence layer.
+     */
+    protected void sharePersistenceDebugDetails() {
+        if (mPersistence == null) {
+            return;
+        }
+        final Intent intent = new Intent(Intent.ACTION_SEND);
+        intent.setType("message/rfc822");
+        intent.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.email_debug_subject));
+        intent.putExtra(Intent.EXTRA_TEXT, mPersistence.debugDetails());
+
+        if (intent.resolveActivity(getPackageManager()) != null) {
+            startActivity(intent);
+        } else {
+            Toast.makeText(this, getString(R.string.no_email_client), Toast.LENGTH_LONG).show();
         }
     }
 }

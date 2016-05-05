@@ -227,6 +227,9 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
             case R.id.action_edit:
                 initiateTodoListEdit();
                 return true;
+            case R.id.action_debug:
+                sharePersistenceDebugDetails();
+                return true;
             case R.id.action_share:
                 // TODO(alexfandrianto): We should figure out who is near us.
                 List<String> fakeNearby = new ArrayList<>();

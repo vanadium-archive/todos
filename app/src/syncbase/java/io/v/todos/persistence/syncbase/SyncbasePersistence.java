@@ -23,13 +23,16 @@ import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 
+import org.joda.time.DateTime;
 import org.joda.time.Duration;
+import org.joda.time.format.DateTimeFormat;
 
 import java.io.File;
 import java.util.concurrent.Executors;
 
 import javax.annotation.Nullable;
 
+import io.v.android.inspectors.RemoteInspectors;
 import io.v.android.VAndroidContext;
 import io.v.android.VAndroidContexts;
 import io.v.android.security.BlessingsManager;
@@ -84,10 +87,10 @@ public class SyncbasePersistence implements Persistence {
     public static final String
             USER_COLLECTION_NAME = "userdata",
             MOUNTPOINT = "/ns.dev.v.io:8101/tmp/todos/users/",
-            CLOUD_NAME = MOUNTPOINT + "cloud";
+            CLOUD_NAME = MOUNTPOINT + "cloud",
+            // TODO(alexfandrianto): This shouldn't be me running the cloud.
+            CLOUD_BLESSING = "dev.v.io:u:alexfandrianto@google.com";
 
-    // TODO(alexfandrianto): This shouldn't be me running the cloud.
-    public static final String CLOUD_BLESSING = "dev.v.io:u:alexfandrianto@google.com";
     // BlessingPattern initialization has to be deferred until after V23 init due to native binding.
     private static final Supplier<AccessList> OPEN_ACL = Suppliers.memoize(
             new Supplier<AccessList>() {
@@ -104,6 +107,7 @@ public class SyncbasePersistence implements Persistence {
     private static final Object sSyncbaseMutex = new Object();
     private static VContext sVContext;
     private static SyncbaseService sSyncbase;
+    private static RemoteInspectors sRemoteInspectors;
 
     private static String startSyncbaseServer(VContext vContext, Context appContext,
                                               Permissions serverPermissions)
@@ -126,7 +130,16 @@ public class SyncbasePersistence implements Persistence {
         VContext serverContext = SyncbaseServer.withNewServer(vContext, params);
 
         Server server = V.getServer(serverContext);
-        return "/" + server.getStatus().getEndpoints()[0];
+        try {
+            sRemoteInspectors = new RemoteInspectors(serverContext);
+        } catch (VException e) {
+            Log.w(TAG, "Unable to start remote inspection service:" + e);
+        }
+        // TODO(ashankar): This is not a good idea. For one, endpoints of a service may change
+        // as the device changes networks. But I believe in a few weeks (end of May 2016) we'll
+        // switch to a mode where there are no "local RPCs" between the syncbase client and the
+        // server, so this will hopefully go away before it matters.
+        return server.getStatus().getEndpoints()[0].name();
     }
 
     /**
@@ -454,5 +467,20 @@ public class SyncbasePersistence implements Persistence {
         ensureCloudDatabaseExists();
         ensureUserSyncgroupExists();
         sInitialized = true;
+    }
+
+    @Override
+    public String debugDetails() {
+        synchronized (sSyncbaseMutex) {
+            if (sRemoteInspectors == null) {
+                return "Syncbase has not been initialized";
+            }
+            final String timestamp = DateTimeFormat.forPattern("yyyy-MM-dd").print(new DateTime());
+            try {
+                return sRemoteInspectors.invite("invited-on-"+timestamp, Duration.standardDays(1));
+            } catch (VException e) {
+                return "Unable to setup remote inspection: " + e;
+            }
+        }
     }
 }

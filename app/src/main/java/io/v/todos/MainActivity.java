@@ -179,6 +179,10 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
         if (id == R.id.action_settings) {
             return true;
         }
+        if (id == R.id.action_debug) {
+            sharePersistenceDebugDetails();
+            return true;
+        }
 
         return super.onOptionsItemSelected(item);
     }

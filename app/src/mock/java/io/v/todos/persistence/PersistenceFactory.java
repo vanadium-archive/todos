@@ -65,6 +65,11 @@ public final class PersistenceFactory {
         @Override
         public void close() {
         }
+
+        @Override
+        public String debugDetails() {
+            return "";
+        }
     }
 
     static class MockTodoListPersistence implements TodoListPersistence {
@@ -98,6 +103,11 @@ public final class PersistenceFactory {
 
         @Override
         public void close() {
+        }
+
+        @Override
+        public String debugDetails() {
+            return "";
         }
     }
 }

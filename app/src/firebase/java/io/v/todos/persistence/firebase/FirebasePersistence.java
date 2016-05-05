@@ -43,4 +43,9 @@ public abstract class FirebasePersistence implements Persistence {
 
         mFirebase = new Firebase(FIREBASE_EXAMPLE_URL);
     }
+
+    @Override
+    public String debugDetails() {
+        return FIREBASE_EXAMPLE_URL;
+    }
 }
