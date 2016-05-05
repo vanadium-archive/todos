@@ -19,9 +19,11 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+
+import org.joda.time.Duration;
 
 import java.io.File;
 import java.util.concurrent.Executors;
@@ -76,6 +78,9 @@ public class SyncbasePersistence implements Persistence {
             LIST_COLLECTION_SYNCGROUP_SUFFIX = "/%%sync/list_",
             DEFAULT_BLESSING_STRING = "dev.v.io:o:608941808256-43vtfndets79kf5hac8ieujto8837660" +
                     ".apps.googleusercontent.com:";
+    protected static final long
+            SHORT_TIMEOUT = 2500,
+            RETRY_DELAY = 2000;
     public static final String
             USER_COLLECTION_NAME = "userdata",
             MOUNTPOINT = "/ns.dev.v.io:8101/tmp/todos/users/",
@@ -93,8 +98,8 @@ public class SyncbasePersistence implements Persistence {
                 }
             });
 
-    protected static final ListeningExecutorService sExecutor =
-            MoreExecutors.listeningDecorator(Executors.newCachedThreadPool());
+    protected static final ListeningScheduledExecutorService sExecutor =
+            MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(10));
 
     private static final Object sSyncbaseMutex = new Object();
     private static VContext sVContext;
@@ -247,7 +252,8 @@ public class SyncbasePersistence implements Persistence {
                 SyncbaseService cloudService = Syncbase.newService(CLOUD_NAME);
                 Database db = cloudService.getDatabase(sVContext, DATABASE, null);
                 try {
-                    VFutures.sync(db.create(sVContext, null));
+                    VFutures.sync(db.create(sVContext.withTimeout(Duration.millis(SHORT_TIMEOUT))
+                            , null));
                 } catch (ExistException e) {
                     // This is acceptable. No need to do it again.
                 } catch (Exception e) {
@@ -427,6 +433,7 @@ public class SyncbasePersistence implements Persistence {
                 }
             });
         }
+
         VFutures.sync(Futures.dereference(blessings));
         ensureSyncbaseStarted(activity);
         ensureDatabaseExists();

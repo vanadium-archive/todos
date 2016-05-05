@@ -10,6 +10,7 @@ import android.support.annotation.NonNull;
 import android.util.Log;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
@@ -82,24 +84,25 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                     mIdGenerator.registerId(change.getRowName().substring(LISTS_PREFIX.length()));
 
                     Log.d(TAG, "Found a list id from userdata watch: " + listId);
-                    // TODO(alexfandrianto): Exponential backoff on joining this list syncgroup.
-                    Futures.addCallback(joinListSyncgroup(listId),
-                            new TrappingCallback<SyncgroupSpec>(getErrorReporter()) {
-                        @Override
-                        public void onFailure(@NonNull Throwable t) {
-                            if (t instanceof SyncgroupJoinFailedException) {
-                                // Let's try again...
-                                try {
-                                    Thread.sleep(2000);
-                                } catch (InterruptedException e) {}
+                    Futures.catchingAsync(joinListSyncgroup(listId),
+                            SyncgroupJoinFailedException.class, new
+                                    AsyncFunction<SyncgroupJoinFailedException, SyncgroupSpec>() {
+                        public ListenableFuture<SyncgroupSpec> apply(@Nullable
+                                                                     SyncgroupJoinFailedException
+                                                                             input) throws
+                                Exception {
+                            Log.d(TAG, "Join failed. Sleeping and trying again: " + listId);
+                            return sExecutor.schedule(new Callable<SyncgroupSpec>() {
 
+                                @Override
+                                public SyncgroupSpec call() throws Exception {
+                                    Log.d(TAG, "Sleep done. Trying again: " + listId);
 
-                                // If this errors, then we will not get another chance to see this
-                                // syncgroup until the app is restarted.
-                                trap(joinListSyncgroup(listId));
-                            } else {
-                                super.onFailure(t);
-                            }
+                                    // If this errors, then we will not get another chance to see
+                                    // this syncgroup until the app is restarted.
+                                    return joinListSyncgroup(listId).get();
+                                }
+                            }, RETRY_DELAY, TimeUnit.MILLISECONDS);
                         }
                     });
 
