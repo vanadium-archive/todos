@@ -222,8 +222,6 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
             case R.id.show_done:
                 mPersistence.setShowDone(!item.isChecked());
                 return true;
-            case R.id.action_settings:
-                return true;
             case R.id.action_edit:
                 initiateTodoListEdit();
                 return true;

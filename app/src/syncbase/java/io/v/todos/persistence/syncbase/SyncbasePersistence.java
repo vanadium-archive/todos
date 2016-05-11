@@ -5,6 +5,7 @@
 package io.v.todos.persistence.syncbase;
 
 import android.app.Activity;
+import android.app.FragmentTransaction;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
@@ -41,6 +42,7 @@ import io.v.android.v23.V;
 import io.v.impl.google.services.syncbase.SyncbaseServer;
 import io.v.todos.R;
 import io.v.todos.persistence.Persistence;
+import io.v.todos.sharing.NeighborhoodFragment;
 import io.v.v23.OptionDefs;
 import io.v.v23.Options;
 import io.v.v23.VFutures;
@@ -429,12 +431,22 @@ public class SyncbasePersistence implements Persistence {
         Futures.addCallback(future, new TrappingCallback<>(getErrorReporter()));
     }
 
+    protected void addFeatureFragments(FragmentTransaction fragments) {
+        fragments.add(new NeighborhoodFragment(), NeighborhoodFragment.FRAGMENT_TAG);
+    }
+
     /**
      * This constructor is blocking for simplicity.
      */
     public SyncbasePersistence(final Activity activity, Bundle savedInstanceState)
             throws VException, SyncbaseServer.StartException {
         mVAndroidContext = VAndroidContexts.withDefaults(activity, savedInstanceState);
+
+        if (savedInstanceState == null) {
+            FragmentTransaction fragments = activity.getFragmentManager().beginTransaction();
+            addFeatureFragments(fragments);
+            fragments.commit();
+        }
 
         // We might not actually have to seek blessings each time, but getBlessings does not
         // block if we already have blessings and this has better-behaved lifecycle

@@ -50,28 +50,28 @@ dependencies {
     testCompile 'junit:junit:4.12'
 
     // Additional testing libraries (mockito and espresso) for the mock flavor.
-    androidTestMockCompile (
+    androidTestMockCompile(
             'org.mockito:mockito-core:1.10.19',
             'com.google.dexmaker:dexmaker:1.2',
             'com.google.dexmaker:dexmaker-mockito:1.2'
     )
 
-    androidTestMockCompile ('com.android.support.test.espresso:espresso-intents:2.2') {
-            // Necessary to avoid version conflicts
-            exclude group: 'com.android.support', module: 'appcompat'
-            exclude group: 'com.android.support', module: 'support-v4'
-            exclude group: 'com.android.support', module: 'support-annotations'
-            exclude module: 'recyclerview-v7'
+    androidTestMockCompile('com.android.support.test.espresso:espresso-intents:2.2') {
+        // Necessary to avoid version conflicts
+        exclude group: 'com.android.support', module: 'appcompat'
+        exclude group: 'com.android.support', module: 'support-v4'
+        exclude group: 'com.android.support', module: 'support-annotations'
+        exclude module: 'recyclerview-v7'
     }
     androidTestMockCompile('com.android.support.test.espresso:espresso-contrib:2.2') {
-            // Necessary to avoid version conflicts
-            exclude group: 'com.android.support', module: 'appcompat'
-            exclude group: 'com.android.support', module: 'support-v4'
-            exclude group: 'com.android.support', module: 'support-annotations'
-            exclude module: 'recyclerview-v7'
+        // Necessary to avoid version conflicts
+        exclude group: 'com.android.support', module: 'appcompat'
+        exclude group: 'com.android.support', module: 'support-v4'
+        exclude group: 'com.android.support', module: 'support-annotations'
+        exclude module: 'recyclerview-v7'
     }
 
-    compile (
+    compile(
             'com.android.support:appcompat-v7:23.1.1',
             'com.android.support:design:23.1.1',
             'com.android.support:cardview-v7:23.1.1',
