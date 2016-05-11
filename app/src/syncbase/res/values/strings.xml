@@ -1,4 +1,11 @@
 <resources>
     <string name="app_name">Syncbase Todos</string>
     <string name="share_location">Share Location</string>
+    <!-- For Sharing Menu -->
+    <string name="sharing_already">Sharing With</string>
+    <string name="sharing_possible">Nearby</string>
+    <string name="sharing_custom_hint">Add an email address...</string>
+    <!-- Errors -->
+    <string name="err_share_location">Could not share location</string>
+    <string name="err_scan_nearby">Unable to scan for nearby users</string>
 </resources>

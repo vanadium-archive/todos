@@ -5,6 +5,8 @@
 package io.v.todos.persistence.syncbase;
 
 import android.app.Activity;
+import android.app.FragmentManager;
+import android.app.FragmentTransaction;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.util.Log;
@@ -29,6 +31,7 @@ import io.v.todos.model.Task;
 import io.v.todos.model.TaskSpec;
 import io.v.todos.persistence.TodoListListener;
 import io.v.todos.persistence.TodoListPersistence;
+import io.v.todos.sharing.ShareListMenuFragment;
 import io.v.v23.InputChannel;
 import io.v.v23.InputChannelCallback;
 import io.v.v23.InputChannels;
@@ -65,6 +68,20 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.ROW_NAME, true);
     private final Set<String> mTaskIds = new HashSet<>();
     private final Timer mMemberTimer;
+    private ShareListMenuFragment mShareListMenuFragment;
+
+    @Override
+    protected void addFeatureFragments(FragmentManager manager, FragmentTransaction transaction) {
+        super.addFeatureFragments(manager, transaction);
+        if (transaction == null) {
+            mShareListMenuFragment = ShareListMenuFragment.find(manager);
+        } else {
+            mShareListMenuFragment = new ShareListMenuFragment();
+            transaction.add(mShareListMenuFragment, ShareListMenuFragment.FRAGMENT_TAG);
+        }
+        mShareListMenuFragment.persistence = this;
+        mShareListMenuFragment.setEmail(getPersonalEmail());
+    }
 
     /**
      * This assumes that the collection for this list already exists.
@@ -85,7 +102,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
                         return null;
                     }
                 });
-        Futures.addCallback(listWatchFuture, new TrappingCallback<Void>(getErrorReporter()) {
+        Futures.addCallback(listWatchFuture, new SyncTrappingCallback<Void>() {
             @Override
             public void onFailure(@NonNull Throwable t) {
                 if (t instanceof NoExistException) {
@@ -128,7 +145,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
 
                 // Analyze these patterns to construct the emails, and fire the listener!
                 List<String> emails = parseEmailsFromPatterns(patterns);
-                mListener.onShareChanged(emails);
+                mShareListMenuFragment.setSharedTo(emails);
             }
         }, MEMBER_TIMER_DELAY, MEMBER_TIMER_PERIOD);
 
@@ -153,7 +170,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
                 // Skip. It's the cloud, and that doesn't count.
                 continue;
             }
-            if (pattern.toString().endsWith(getPersonalEmail(getVContext()))) {
+            if (pattern.toString().endsWith(getPersonalEmail())) {
                 // Skip. It's you, and that doesn't count.
                 continue;
             }
@@ -205,7 +222,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     }
 
     private Syncgroup getListSyncgroup() {
-        return getDatabase().getSyncgroup(new Id(getPersonalBlessingsString(getVContext()),
+        return getDatabase().getSyncgroup(new Id(getPersonalBlessingsString(),
                 computeListSyncgroupName(mList.id().getName())));
     }
 
@@ -236,7 +253,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
                 // Analyze these patterns to construct the emails, and fire the listener!
                 List<String> specEmails = parseEmailsFromPatterns(
                         perms.get(Constants.READ.getValue()).getIn());
-                mListener.onShareChanged(specEmails);
+                mShareListMenuFragment.setSharedTo(specEmails);
 
                 // Add read and write access to the collection permissions.
                 perms = VFutures.sync(mList.getPermissions(getVContext()));
@@ -251,6 +268,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
 
     // TODO(alexfandrianto): We should consider moving this helper into the main Java repo.
     // https://github.com/vanadium/issues/issues/1321
+    // TODO(alexfandrianto): This allows you to repeatedly add the same blessings to the permission
+    // multiple times.
     private static void addPermissions(Permissions perms, Iterable<String> emails, String tag) {
         AccessList acl = perms.get(tag);
         List<BlessingPattern> patterns = acl.getIn();

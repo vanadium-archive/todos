@@ -5,11 +5,13 @@
 package io.v.todos.persistence.syncbase;
 
 import android.app.Activity;
+import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.annotation.NonNull;
+import android.support.annotation.CallSuper;
+import android.support.annotation.Nullable;
 import android.util.Log;
 
 import com.google.common.base.Supplier;
@@ -17,7 +19,6 @@ import com.google.common.base.Suppliers;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
@@ -29,22 +30,23 @@ import org.joda.time.Duration;
 import org.joda.time.format.DateTimeFormat;
 
 import java.io.File;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
-
-import javax.annotation.Nullable;
+import java.util.concurrent.Future;
 
 import io.v.android.inspectors.RemoteInspectors;
+import io.v.android.ManagedVAndroidContext;
 import io.v.android.VAndroidContext;
 import io.v.android.VAndroidContexts;
-import io.v.android.security.BlessingsManager;
 import io.v.android.error.ErrorReporter;
+import io.v.android.error.ToastingErrorReporter;
+import io.v.android.security.BlessingsManager;
 import io.v.android.v23.V;
 import io.v.impl.google.services.syncbase.SyncbaseServer;
 import io.v.todos.R;
 import io.v.todos.persistence.Persistence;
 import io.v.todos.sharing.NeighborhoodFragment;
-import io.v.v23.OptionDefs;
-import io.v.v23.Options;
+import io.v.todos.sharing.Sharing;
 import io.v.v23.VFutures;
 import io.v.v23.context.VContext;
 import io.v.v23.rpc.Server;
@@ -64,7 +66,6 @@ import io.v.v23.syncbase.Syncbase;
 import io.v.v23.syncbase.SyncbaseService;
 import io.v.v23.syncbase.Syncgroup;
 import io.v.v23.vdl.VdlStruct;
-import io.v.v23.verror.CanceledException;
 import io.v.v23.verror.ExistException;
 import io.v.v23.verror.VException;
 import io.v.v23.vom.VomUtil;
@@ -107,10 +108,33 @@ public class SyncbasePersistence implements Persistence {
     protected static final ListeningScheduledExecutorService sExecutor =
             MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(10));
 
+    private static final Object sVContextMutex = new Object();
+    private static VAndroidContext<Context> sVAndroidContext;
+
     private static final Object sSyncbaseMutex = new Object();
-    private static VContext sVContext;
     private static SyncbaseService sSyncbase;
     private static RemoteInspectors sRemoteInspectors;
+
+    private static void appVInit(Context appContext) {
+        synchronized (sVContextMutex) {
+            if (sVAndroidContext == null) {
+                sVAndroidContext = new ManagedVAndroidContext<>(appContext,
+                        new ToastingErrorReporter(appContext));
+            }
+        }
+    }
+
+    public static Context getAppContext() {
+        return sVAndroidContext.getAndroidContext();
+    }
+
+    public static VContext getAppVContext() {
+        return sVAndroidContext.getVContext();
+    }
+
+    public static ErrorReporter getAppErrorReporter() {
+        return sVAndroidContext.getErrorReporter();
+    }
 
     private static String startSyncbaseServer(VContext vContext, Context appContext,
                                               Permissions serverPermissions)
@@ -161,14 +185,10 @@ public class SyncbasePersistence implements Persistence {
             throws SyncbaseServer.StartException, VException {
         synchronized (sSyncbaseMutex) {
             if (sSyncbase == null) {
-                final Context appContext = androidContext.getApplicationContext();
-                VContext singletonContext = V.init(appContext, new Options()
-                        .set(OptionDefs.LOG_VLEVEL, 0)
-                        .set(OptionDefs.LOG_VMODULE, "vsync*=0"));
-
+                VContext serverRun = getAppVContext().withCancel();
                 try {
                     // Retrieve this context's personal permissions to set ACLs on the server.
-                    Blessings personalBlessings = getPersonalBlessings(singletonContext);
+                    Blessings personalBlessings = getPersonalBlessings();
                     if (personalBlessings == null) {
                         throw new IllegalStateException("Blessings must be attached to the " +
                                 "Vanadium principal before Syncbase initialization.");
@@ -176,39 +196,44 @@ public class SyncbasePersistence implements Persistence {
                     Permissions permissions = computePermissionsFromBlessings(personalBlessings);
 
                     sSyncbase = Syncbase.newService(startSyncbaseServer(
-                            singletonContext, appContext, permissions));
+                            serverRun, getAppContext(), permissions));
                 } catch (SyncbaseServer.StartException | RuntimeException e) {
-                    singletonContext.cancel();
+                    serverRun.cancel();
                     throw e;
                 }
-                sVContext = singletonContext;
             }
         }
     }
 
-    protected static Blessings getPersonalBlessings(VContext ctx) {
-        return V.getPrincipal(ctx).blessingStore().defaultBlessings();
+    // TODO(rosswang): Factor into v23
+    public static Blessings getPersonalBlessings() {
+        return V.getPrincipal(getAppVContext()).blessingStore().defaultBlessings();
     }
 
-    protected static String getPersonalBlessingsString(VContext ctx) {
-        return getPersonalBlessings(ctx).toString();
+    public static String getPersonalBlessingsString() {
+        return getPersonalBlessings().toString();
     }
 
-    protected static String getEmailFromBlessings(Blessings blessings) {
-        String[] split = blessings.toString().split(":");
+    public static String getEmailFromBlessings(Blessings blessings) {
+        // TODO(alexfandrianto): This should be in v23, but it should also verify that the app
+        // component is the right one in the blessing.
+        return getEmailFromBlessingsString(blessings.toString());
+    }
+
+    public static String getEmailFromPattern(BlessingPattern pattern) {
+        return getEmailFromBlessingsString(pattern.toString());
+    }
+
+    public static String getEmailFromBlessingsString(String blessingsStr) {
+        String[] split = blessingsStr.split(":");
         return split[split.length - 1];
     }
 
-    protected static String getEmailFromPattern(BlessingPattern pattern) {
-        String[] split = pattern.toString().split(":");
-        return split[split.length - 1];
+    public static String getPersonalEmail() {
+        return getEmailFromBlessings(getPersonalBlessings());
     }
 
-    protected static String getPersonalEmail(VContext ctx) {
-        return getEmailFromBlessings(getPersonalBlessings(ctx));
-    }
-
-    protected static String blessingsStringFromEmail(String email) {
+    public static String blessingsStringFromEmail(String email) {
         // TODO(alexfandrianto): We may need a more sophisticated method for producing this
         // blessings string. Currently, the app's id is fixed to the anonymous Android app.
         return DEFAULT_BLESSING_STRING + email;
@@ -232,10 +257,10 @@ public class SyncbasePersistence implements Persistence {
     private static void ensureDatabaseExists() throws VException {
         synchronized (sDatabaseMutex) {
             if (sDatabase == null) {
-                final Database db = sSyncbase.getDatabase(sVContext, DATABASE, null);
+                final Database db = sSyncbase.getDatabase(getAppVContext(), DATABASE, null);
 
                 try {
-                    VFutures.sync(db.create(sVContext, null));
+                    VFutures.sync(db.create(getAppVContext(), null));
                 } catch (ExistException e) {
                     // This is fine.
                 }
@@ -245,15 +270,15 @@ public class SyncbasePersistence implements Persistence {
     }
 
     private static final Object sUserCollectionMutex = new Object();
-    private static volatile Collection sUserCollection;
+    private static Collection sUserCollection;
 
     private static void ensureUserCollectionExists() throws VException {
         synchronized (sUserCollectionMutex) {
             if (sUserCollection == null) {
                 Collection userCollection = sDatabase.getCollection(
-                        new Id(getPersonalBlessingsString(sVContext), USER_COLLECTION_NAME));
+                        new Id(getPersonalBlessingsString(), USER_COLLECTION_NAME));
                 try {
-                    VFutures.sync(userCollection.create(sVContext, null));
+                    VFutures.sync(userCollection.create(getAppVContext(), null));
                 } catch (ExistException e) {
                     // This is fine.
                 }
@@ -263,17 +288,16 @@ public class SyncbasePersistence implements Persistence {
     }
 
     private static final Object sCloudDatabaseMutex = new Object();
-    private static volatile Database sCloudDatabase;
-
+    private static Database sCloudDatabase;
 
     private static void ensureCloudDatabaseExists() {
         synchronized (sCloudDatabaseMutex) {
             if (sCloudDatabase == null) {
                 SyncbaseService cloudService = Syncbase.newService(CLOUD_NAME);
-                Database db = cloudService.getDatabase(sVContext, DATABASE, null);
+                Database db = cloudService.getDatabase(getAppVContext(), DATABASE, null);
                 try {
-                    VFutures.sync(db.create(sVContext.withTimeout(Duration.millis(SHORT_TIMEOUT))
-                            , null));
+                    VFutures.sync(db.create(getAppVContext()
+                            .withTimeout(Duration.millis(SHORT_TIMEOUT)), null));
                 } catch (ExistException e) {
                     // This is acceptable. No need to do it again.
                 } catch (Exception e) {
@@ -285,12 +309,12 @@ public class SyncbasePersistence implements Persistence {
     }
 
     private static final Object sUserSyncgroupMutex = new Object();
-    private static volatile Syncgroup sUserSyncgroup;
+    private static Syncgroup sUserSyncgroup;
 
     private static void ensureUserSyncgroupExists() throws VException {
         synchronized (sUserSyncgroupMutex) {
             if (sUserSyncgroup == null) {
-                Blessings clientBlessings = getPersonalBlessings(sVContext);
+                Blessings clientBlessings = getPersonalBlessings();
                 String email = getEmailFromBlessings(clientBlessings);
                 Log.d(TAG, email);
 
@@ -304,7 +328,8 @@ public class SyncbasePersistence implements Persistence {
 
                 try {
                     Log.d(TAG, "Trying to join the syncgroup: " + sgName);
-                    VFutures.sync(sgHandle.join(sVContext, CLOUD_NAME, CLOUD_BLESSING, memberInfo));
+                    VFutures.sync(sgHandle.join(getAppVContext(), CLOUD_NAME, CLOUD_BLESSING,
+                            memberInfo));
                     Log.d(TAG, "JOINED the syncgroup: " + sgName);
                 } catch (SyncgroupJoinFailedException e) {
                     Log.w(TAG, "Failed join. Trying to create the syncgroup: " + sgName, e);
@@ -313,7 +338,7 @@ public class SyncbasePersistence implements Persistence {
                             ImmutableList.of(new CollectionRow(sUserCollection.id(), "")),
                             ImmutableList.of(MOUNTPOINT), false);
                     try {
-                        VFutures.sync(sgHandle.create(sVContext, spec, memberInfo));
+                        VFutures.sync(sgHandle.create(getAppVContext(), spec, memberInfo));
                     } catch (BadAdvertisementException e2) {
                         Log.d(TAG, "Bad advertisement exception. Can we fix this?");
                     }
@@ -336,7 +361,7 @@ public class SyncbasePersistence implements Persistence {
 
     }
 
-    protected String computeListSyncgroupName(String listId) {
+    protected static String computeListSyncgroupName(String listId) {
         return LIST_COLLECTION_SYNCGROUP_SUFFIX + listId;
     }
 
@@ -344,39 +369,6 @@ public class SyncbasePersistence implements Persistence {
 
     public static boolean isInitialized() {
         return sInitialized;
-    }
-
-    /**
-     * A {@link FutureCallback} that reports persistence errors by toasting a short message to the
-     * user and logging the exception trace and the call stack from where the future was invoked.
-     */
-    public static class TrappingCallback<T> implements FutureCallback<T> {
-        private static final int FIRST_SIGNIFICANT_STACK_ELEMENT = 3;
-        private final ErrorReporter mErrorReporter;
-        private final StackTraceElement[] mCaller;
-
-        public TrappingCallback(ErrorReporter errorReporter) {
-            mErrorReporter = errorReporter;
-            mCaller = Thread.currentThread().getStackTrace();
-        }
-
-        @Override
-        public void onSuccess(@Nullable T result) {
-        }
-
-        @Override
-        public void onFailure(@NonNull Throwable t) {
-            if (!(t instanceof CanceledException || t instanceof ExistException)) {
-                mErrorReporter.onError(R.string.err_sync, t);
-
-                StringBuilder traceBuilder = new StringBuilder(t.getMessage())
-                        .append("\n invoked at ").append(mCaller[FIRST_SIGNIFICANT_STACK_ELEMENT]);
-                for (int i = FIRST_SIGNIFICANT_STACK_ELEMENT + 1; i < mCaller.length; i++) {
-                    traceBuilder.append("\n\tat ").append(mCaller[i]);
-                }
-                Log.e(TAG, traceBuilder.toString());
-            }
-        }
     }
 
     /**
@@ -398,6 +390,12 @@ public class SyncbasePersistence implements Persistence {
         } catch (VException e) {
             Log.e(TAG, Throwables.getStackTraceAsString(e));
             throw new ClassCastException("Could not cast " + watchValue + " to " + type);
+        }
+    }
+
+    protected class SyncTrappingCallback<T> extends TrappingCallback<T> {
+        public SyncTrappingCallback() {
+            super(R.string.err_sync, TAG, getErrorReporter());
         }
     }
 
@@ -428,11 +426,21 @@ public class SyncbasePersistence implements Persistence {
      * @see TrappingCallback
      */
     protected void trap(ListenableFuture<?> future) {
-        Futures.addCallback(future, new TrappingCallback<>(getErrorReporter()));
+        Futures.addCallback(future, new SyncTrappingCallback<>());
     }
 
-    protected void addFeatureFragments(FragmentTransaction fragments) {
-        fragments.add(new NeighborhoodFragment(), NeighborhoodFragment.FRAGMENT_TAG);
+    /**
+     * Hook to insert or rebind fragments.
+     * @param manager
+     * @param transaction the fragment transaction to use to add fragments, or null if fragments are
+     *                    being restored by the system.
+     */
+    @CallSuper
+    protected void addFeatureFragments(FragmentManager manager,
+                                       @Nullable FragmentTransaction transaction) {
+        if (transaction != null) {
+            transaction.add(new NeighborhoodFragment(), NeighborhoodFragment.FRAGMENT_TAG);
+        }
     }
 
     /**
@@ -442,10 +450,13 @@ public class SyncbasePersistence implements Persistence {
             throws VException, SyncbaseServer.StartException {
         mVAndroidContext = VAndroidContexts.withDefaults(activity, savedInstanceState);
 
+        FragmentManager mgr = activity.getFragmentManager();
         if (savedInstanceState == null) {
-            FragmentTransaction fragments = activity.getFragmentManager().beginTransaction();
-            addFeatureFragments(fragments);
-            fragments.commit();
+            FragmentTransaction t = mgr.beginTransaction();
+            addFeatureFragments(mgr, t);
+            t.commit();
+        } else {
+            addFeatureFragments(mgr, null);
         }
 
         // We might not actually have to seek blessings each time, but getBlessings does not
@@ -466,11 +477,26 @@ public class SyncbasePersistence implements Persistence {
         }
 
         VFutures.sync(Futures.dereference(blessings));
+        appVInit(activity.getApplicationContext());
+        Future<?> initDiscovery = sExecutor.submit(new Callable<Void>() {
+            @Override
+            public Void call() throws VException {
+                Sharing.initDiscovery();
+                return null;
+            }
+        });
+        final Future<?> ensureCloudDatabaseExists = sExecutor.submit(new Runnable() {
+            @Override
+            public void run() {
+                ensureCloudDatabaseExists();
+            }
+        });
         ensureSyncbaseStarted(activity);
         ensureDatabaseExists();
         ensureUserCollectionExists();
-        ensureCloudDatabaseExists();
+        VFutures.sync(ensureCloudDatabaseExists); // must finish before syncgroup setup
         ensureUserSyncgroupExists();
+        VFutures.sync(initDiscovery);
         sInitialized = true;
     }
 

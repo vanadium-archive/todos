@@ -84,31 +84,27 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                     mIdGenerator.registerId(change.getRowName().substring(LISTS_PREFIX.length()));
 
                     Log.d(TAG, "Found a list id from userdata watch: " + listId);
-                    Futures.catchingAsync(joinListSyncgroup(listId),
+                    trap(Futures.catchingAsync(joinListSyncgroup(listId),
                             SyncgroupJoinFailedException.class, new
                                     AsyncFunction<SyncgroupJoinFailedException, SyncgroupSpec>() {
-                                        public ListenableFuture<SyncgroupSpec> apply(@Nullable
-                                                                                     SyncgroupJoinFailedException
-                                                                                             input) throws
-                                                Exception {
-                                            Log.d(TAG, "Join failed. Sleeping and trying again: "
-                                                    + listId);
-                                            return sExecutor.schedule(new Callable<SyncgroupSpec>
-                                                    () {
+                        public ListenableFuture<SyncgroupSpec> apply(@Nullable
+                                                                     SyncgroupJoinFailedException
+                                                                             input) throws
+                                Exception {
+                            Log.d(TAG, "Join failed. Sleeping and trying again: " + listId);
+                            return sExecutor.schedule(new Callable<SyncgroupSpec>() {
 
-                                                @Override
-                                                public SyncgroupSpec call() throws Exception {
-                                                    Log.d(TAG, "Sleep done. Trying again: " +
-                                                            listId);
+                                @Override
+                                public SyncgroupSpec call() throws Exception {
+                                    Log.d(TAG, "Sleep done. Trying again: " + listId);
 
-                                                    // If this errors, then we will not get
-                                                    // another chance to see
-                                                    // this syncgroup until the app is restarted.
-                                                    return joinListSyncgroup(listId).get();
-                                                }
-                                            }, RETRY_DELAY, TimeUnit.MILLISECONDS);
-                                        }
-                                    });
+                                    // If this errors, then we will not get another chance to see
+                                    // this syncgroup until the app is restarted.
+                                    return joinListSyncgroup(listId).get();
+                                }
+                            }, RETRY_DELAY, TimeUnit.MILLISECONDS);
+                        }
+                    }));
 
                     MainListTracker listTracker = new MainListTracker(getVContext(), getDatabase(),
                             listId, listener);
@@ -120,18 +116,17 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                     }
 
                     // If the watch fails with NoExistException, the collection has been deleted.
-                    Futures.addCallback(listTracker.watchFuture,
-                            new TrappingCallback<Void>(getErrorReporter()) {
-                                @Override
-                                public void onFailure(@NonNull Throwable t) {
-                                    if (t instanceof NoExistException) {
-                                        // (this is idempotent)
-                                        trap(getUserCollection().delete(getVContext(), listId));
-                                    } else {
-                                        super.onFailure(t);
-                                    }
-                                }
-                            });
+                    Futures.addCallback(listTracker.watchFuture, new SyncTrappingCallback<Void>() {
+                        @Override
+                        public void onFailure(@NonNull Throwable t) {
+                            if (t instanceof NoExistException) {
+                                // (this is idempotent)
+                                trap(getUserCollection().delete(getVContext(), listId));
+                            } else {
+                                super.onFailure(t);
+                            }
+                        }
+                    });
                 }
                 return null;
             }
@@ -149,11 +144,11 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         // collections anyway. If https://github.com/vanadium/issues/issues/1326 is done, however,
         // we won't need to change this code.
         Futures.addCallback(listCollection.create(getVContext(), null),
-                new TrappingCallback<Void>(getErrorReporter()) {
+                new SyncTrappingCallback<Void>() {
                     @Override
                     public void onSuccess(@Nullable Void result) {
                         Futures.addCallback(createListSyncgroup(listCollection.id()),
-                                new TrappingCallback<Void>(getErrorReporter()) {
+                                new SyncTrappingCallback<Void>() {
                                     @Override
                                     public void onSuccess(@Nullable Void result) {
                                         // These can happen in either order.
@@ -171,7 +166,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     private ListenableFuture<SyncgroupSpec> joinListSyncgroup(String listId) {
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
         String sgName = computeListSyncgroupName(listId);
-        String blessingStr = getPersonalBlessingsString(getVContext());
+        String blessingStr = getPersonalBlessingsString();
         return getDatabase().getSyncgroup(new Id(blessingStr, sgName)).join(getVContext(),
                 CLOUD_NAME, CLOUD_BLESSING, memberInfo);
     }
@@ -180,7 +175,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         String listId = id.getName();
         final String sgName = computeListSyncgroupName(listId);
         Permissions permissions =
-                computePermissionsFromBlessings(getPersonalBlessings(getVContext()));
+                computePermissionsFromBlessings(getPersonalBlessings());
 
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
 
@@ -188,7 +183,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                 "TODOs User Data Collection", CLOUD_NAME, permissions,
                 ImmutableList.of(new CollectionRow(id, "")),
                 ImmutableList.of(MOUNTPOINT), false);
-        String blessingStr = getPersonalBlessingsString(getVContext());
+        String blessingStr = getPersonalBlessingsString();
         return getDatabase().getSyncgroup(new Id(blessingStr, sgName)).create(getVContext(),
                 spec, memberInfo);
     }

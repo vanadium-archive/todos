@@ -11,10 +11,6 @@
     <string name="just_now">Just now</string>
     <string name="email_debug_subject">Debug the persistence layer</string>
     <string name="no_email_client">An app to share emails is not installed, cannot send debug request</string>
-    <!-- For Sharing Menu -->
-    <string name="sharing_already">Sharing With</string>
-    <string name="sharing_possible">Nearby</string>
-    <string name="sharing_custom_hint">Add an email address...</string>
     <!-- Errors -->
     <string name="err_init">Unable to initialize persistence</string>
     <string name="err_sync">Unable to sync</string>
