@@ -38,6 +38,7 @@ import io.v.v23.security.BlessingPattern;
 import io.v.v23.security.access.AccessList;
 import io.v.v23.security.access.Constants;
 import io.v.v23.security.access.Permissions;
+import io.v.v23.services.syncbase.Id;
 import io.v.v23.services.syncbase.SyncgroupSpec;
 import io.v.v23.syncbase.ChangeType;
 import io.v.v23.syncbase.Collection;
@@ -204,7 +205,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     }
 
     private Syncgroup getListSyncgroup() {
-        return getDatabase().getSyncgroup(computeListSyncgroupName(mList.id().getName()));
+        return getDatabase().getSyncgroup(new Id(getPersonalBlessingsString(getVContext()),
+                computeListSyncgroupName(mList.id().getName())));
     }
 
     @Override

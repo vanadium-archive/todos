@@ -52,6 +52,7 @@ import io.v.v23.security.access.AccessList;
 import io.v.v23.security.access.Constants;
 import io.v.v23.security.access.Permissions;
 import io.v.v23.services.syncbase.CollectionRow;
+import io.v.v23.services.syncbase.Id;
 import io.v.v23.services.syncbase.SyncgroupJoinFailedException;
 import io.v.v23.services.syncbase.SyncgroupMemberInfo;
 import io.v.v23.services.syncbase.SyncgroupSpec;
@@ -77,8 +78,8 @@ public class SyncbasePersistence implements Persistence {
             PROXY = "proxy",
             DATABASE = "db",
             BLESSINGS_KEY = "blessings",
-            USER_COLLECTION_SYNCGROUP_SUFFIX = "/%%sync/sg_",
-            LIST_COLLECTION_SYNCGROUP_SUFFIX = "/%%sync/list_",
+            USER_COLLECTION_SYNCGROUP_SUFFIX = "sg_",
+            LIST_COLLECTION_SYNCGROUP_SUFFIX = "list_",
             DEFAULT_BLESSING_STRING = "dev.v.io:o:608941808256-43vtfndets79kf5hac8ieujto8837660" +
                     ".apps.googleusercontent.com:";
     protected static final long
@@ -88,8 +89,8 @@ public class SyncbasePersistence implements Persistence {
             USER_COLLECTION_NAME = "userdata",
             MOUNTPOINT = "/ns.dev.v.io:8101/tmp/todos/users/",
             CLOUD_NAME = MOUNTPOINT + "cloud",
-            // TODO(alexfandrianto): This shouldn't be me running the cloud.
-            CLOUD_BLESSING = "dev.v.io:u:alexfandrianto@google.com";
+    // TODO(alexfandrianto): This shouldn't be me running the cloud.
+    CLOUD_BLESSING = "dev.v.io:u:alexfandrianto@google.com";
 
     // BlessingPattern initialization has to be deferred until after V23 init due to native binding.
     private static final Supplier<AccessList> OPEN_ACL = Suppliers.memoize(
@@ -187,6 +188,10 @@ public class SyncbasePersistence implements Persistence {
         return V.getPrincipal(ctx).blessingStore().defaultBlessings();
     }
 
+    protected static String getPersonalBlessingsString(VContext ctx) {
+        return getPersonalBlessings(ctx).toString();
+    }
+
     protected static String getEmailFromBlessings(Blessings blessings) {
         String[] split = blessings.toString().split(":");
         return split[split.length - 1];
@@ -243,21 +248,8 @@ public class SyncbasePersistence implements Persistence {
     private static void ensureUserCollectionExists() throws VException {
         synchronized (sUserCollectionMutex) {
             if (sUserCollection == null) {
-                // The reason the following doesn't work yet is that collections cross-share.
-                // https://github.com/vanadium/issues/issues/1320
-                //Collection userCollection = sDatabase.getCollection(sVContext,
-                //        USER_COLLECTION_NAME);
-
-                // The reason the following workaround doesn't work is the blessing is too long.
-                // https://github.com/vanadium/issues/issues/1322
-                // Collection userCollection = sDatabase.getCollection(
-                //        new Id(getPersonalBlessings(sVContext).toString(), USER_COLLECTION_NAME));
-
-                // TODO(alexfandrianto): Replace this with one of the above solutions when possible.
-                // This solution is forced to use the email and replace invalid characters.
-                String email = getPersonalEmail(sVContext).replace(".", "_").replace("@", "_AT_");
-                Collection userCollection = sDatabase.getCollection(sVContext,
-                        USER_COLLECTION_NAME + "_" + email);
+                Collection userCollection = sDatabase.getCollection(
+                        new Id(getPersonalBlessingsString(sVContext), USER_COLLECTION_NAME));
                 try {
                     VFutures.sync(userCollection.create(sVContext, null));
                 } catch (ExistException e) {
@@ -302,19 +294,20 @@ public class SyncbasePersistence implements Persistence {
 
                 Permissions permissions = computePermissionsFromBlessings(clientBlessings);
 
-                String sgName = CLOUD_NAME + USER_COLLECTION_SYNCGROUP_SUFFIX + email;
+                String sgName = USER_COLLECTION_SYNCGROUP_SUFFIX + Math.abs(email.hashCode());
 
                 final SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
-                final Syncgroup sgHandle = sDatabase.getSyncgroup(sgName);
+                final Syncgroup sgHandle = sDatabase.getSyncgroup(new Id(clientBlessings.toString
+                        (), sgName));
 
                 try {
                     Log.d(TAG, "Trying to join the syncgroup: " + sgName);
-                    VFutures.sync(sgHandle.join(sVContext, memberInfo));
+                    VFutures.sync(sgHandle.join(sVContext, CLOUD_NAME, CLOUD_BLESSING, memberInfo));
                     Log.d(TAG, "JOINED the syncgroup: " + sgName);
                 } catch (SyncgroupJoinFailedException e) {
                     Log.w(TAG, "Failed join. Trying to create the syncgroup: " + sgName, e);
                     SyncgroupSpec spec = new SyncgroupSpec(
-                            "TODOs User Data Collection", permissions,
+                            "TODOs User Data Collection", CLOUD_NAME, permissions,
                             ImmutableList.of(new CollectionRow(sUserCollection.id(), "")),
                             ImmutableList.of(MOUNTPOINT), false);
                     try {
@@ -342,7 +335,7 @@ public class SyncbasePersistence implements Persistence {
     }
 
     protected String computeListSyncgroupName(String listId) {
-        return CLOUD_NAME + LIST_COLLECTION_SYNCGROUP_SUFFIX + listId;
+        return LIST_COLLECTION_SYNCGROUP_SUFFIX + listId;
     }
 
     private static volatile boolean sInitialized;
@@ -477,7 +470,8 @@ public class SyncbasePersistence implements Persistence {
             }
             final String timestamp = DateTimeFormat.forPattern("yyyy-MM-dd").print(new DateTime());
             try {
-                return sRemoteInspectors.invite("invited-on-"+timestamp, Duration.standardDays(1));
+                return sRemoteInspectors.invite("invited-on-" + timestamp, Duration.standardDays
+                        (1));
             } catch (VException e) {
                 return "Unable to setup remote inspection: " + e;
             }

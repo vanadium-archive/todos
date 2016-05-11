@@ -87,24 +87,28 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                     Futures.catchingAsync(joinListSyncgroup(listId),
                             SyncgroupJoinFailedException.class, new
                                     AsyncFunction<SyncgroupJoinFailedException, SyncgroupSpec>() {
-                        public ListenableFuture<SyncgroupSpec> apply(@Nullable
-                                                                     SyncgroupJoinFailedException
-                                                                             input) throws
-                                Exception {
-                            Log.d(TAG, "Join failed. Sleeping and trying again: " + listId);
-                            return sExecutor.schedule(new Callable<SyncgroupSpec>() {
+                                        public ListenableFuture<SyncgroupSpec> apply(@Nullable
+                                                                                     SyncgroupJoinFailedException
+                                                                                             input) throws
+                                                Exception {
+                                            Log.d(TAG, "Join failed. Sleeping and trying again: "
+                                                    + listId);
+                                            return sExecutor.schedule(new Callable<SyncgroupSpec>
+                                                    () {
 
-                                @Override
-                                public SyncgroupSpec call() throws Exception {
-                                    Log.d(TAG, "Sleep done. Trying again: " + listId);
+                                                @Override
+                                                public SyncgroupSpec call() throws Exception {
+                                                    Log.d(TAG, "Sleep done. Trying again: " +
+                                                            listId);
 
-                                    // If this errors, then we will not get another chance to see
-                                    // this syncgroup until the app is restarted.
-                                    return joinListSyncgroup(listId).get();
-                                }
-                            }, RETRY_DELAY, TimeUnit.MILLISECONDS);
-                        }
-                    });
+                                                    // If this errors, then we will not get
+                                                    // another chance to see
+                                                    // this syncgroup until the app is restarted.
+                                                    return joinListSyncgroup(listId).get();
+                                                }
+                                            }, RETRY_DELAY, TimeUnit.MILLISECONDS);
+                                        }
+                                    });
 
                     MainListTracker listTracker = new MainListTracker(getVContext(), getDatabase(),
                             listId, listener);
@@ -138,22 +142,28 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     public void addTodoList(final ListSpec listSpec) {
         final String listName = LISTS_PREFIX + mIdGenerator.generateTailId();
         final Collection listCollection = getDatabase().getCollection(getVContext(), listName);
+
+        // TODO(alexfandrianto): Syncgroup creation is slow if you specify a cloud and are offline.
+        // We'll try to connect to the cloud and then time out our RPC. The error is swallowed, so
+        // we'll just think there's a blank space of time. Maybe we should just write to these
+        // collections anyway. If https://github.com/vanadium/issues/issues/1326 is done, however,
+        // we won't need to change this code.
         Futures.addCallback(listCollection.create(getVContext(), null),
                 new TrappingCallback<Void>(getErrorReporter()) {
                     @Override
                     public void onSuccess(@Nullable Void result) {
                         Futures.addCallback(createListSyncgroup(listCollection.id()),
                                 new TrappingCallback<Void>(getErrorReporter()) {
-                            @Override
-                            public void onSuccess(@Nullable Void result) {
-                                // These can happen in either order.
-                                trap(getUserCollection().put(getVContext(), listName, null,
-                                        VdlAny.class));
-                                trap(listCollection.put(getVContext(),
-                                        SyncbaseTodoList.LIST_METADATA_ROW_NAME, listSpec,
-                                        ListSpec.class));
-                            }
-                        });
+                                    @Override
+                                    public void onSuccess(@Nullable Void result) {
+                                        // These can happen in either order.
+                                        trap(getUserCollection().put(getVContext(), listName, null,
+                                                VdlAny.class));
+                                        trap(listCollection.put(getVContext(),
+                                                SyncbaseTodoList.LIST_METADATA_ROW_NAME, listSpec,
+                                                ListSpec.class));
+                                    }
+                                });
                     }
                 });
     }
@@ -161,7 +171,9 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     private ListenableFuture<SyncgroupSpec> joinListSyncgroup(String listId) {
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
         String sgName = computeListSyncgroupName(listId);
-        return getDatabase().getSyncgroup(sgName).join(getVContext(), memberInfo);
+        String blessingStr = getPersonalBlessingsString(getVContext());
+        return getDatabase().getSyncgroup(new Id(blessingStr, sgName)).join(getVContext(),
+                CLOUD_NAME, CLOUD_BLESSING, memberInfo);
     }
 
     private ListenableFuture<Void> createListSyncgroup(Id id) {
@@ -173,10 +185,12 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
 
         SyncgroupSpec spec = new SyncgroupSpec(
-                "TODOs User Data Collection", permissions,
+                "TODOs User Data Collection", CLOUD_NAME, permissions,
                 ImmutableList.of(new CollectionRow(id, "")),
                 ImmutableList.of(MOUNTPOINT), false);
-        return getDatabase().getSyncgroup(sgName).create(getVContext(), spec, memberInfo);
+        String blessingStr = getPersonalBlessingsString(getVContext());
+        return getDatabase().getSyncgroup(new Id(blessingStr, sgName)).create(getVContext(),
+                spec, memberInfo);
     }
 
     @Override
