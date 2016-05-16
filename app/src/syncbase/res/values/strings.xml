@@ -8,4 +8,6 @@
     <!-- Errors -->
     <string name="err_share_location">Could not share location</string>
     <string name="err_scan_nearby">Unable to scan for nearby users</string>
+    <string name="err_scan_lists">Unable to scan for todo lists shared with you</string>
+    <string name="err_advertise_list">Unable to send todo list invitation(s)</string>
 </resources>

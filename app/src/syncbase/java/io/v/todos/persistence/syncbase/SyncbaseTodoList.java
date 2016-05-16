@@ -9,8 +9,8 @@ import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
-import android.util.Log;
 
+import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.Callable;
 
 import io.v.impl.google.services.syncbase.SyncbaseServer;
@@ -59,10 +58,6 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     private static final String
             SHOW_DONE_ROW_NAME = "ShowDone";
 
-    private static final long
-            MEMBER_TIMER_DELAY = 100,
-            MEMBER_TIMER_PERIOD = 5000;
-
     private final Collection mList;
     private final TodoListListener mListener;
     private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.ROW_NAME, true);
@@ -81,6 +76,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
         }
         mShareListMenuFragment.persistence = this;
         mShareListMenuFragment.setEmail(getPersonalEmail());
+        // TODO(alexfandrianto): I shouldn't show the sharing menu item when this person cannot
+        // share the todo list with other people. (Cannot re-share in this app.)
     }
 
     /**
@@ -114,40 +111,15 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
             }
         });
 
-        final Syncgroup sgHandle = getListSyncgroup();
-        mMemberTimer = new Timer();
-        mMemberTimer.scheduleAtFixedRate(new TimerTask() {
-            private SyncgroupSpec lastSpec;
-
+        mMemberTimer = watchSharedTo(listId, new Function<List<BlessingPattern>, Void>() {
             @Override
-            public void run() {
-                Map<String, SyncgroupSpec> specMap;
-                try {
-                    // Ok to block; we don't want to try parallel polls.
-                    specMap = VFutures.sync(sgHandle.getSpec(getVContext()));
-                } catch (Exception e) {
-                    Log.w(TAG, "Failed to get syncgroup spec for list: " + mList.id().getName(), e);
-                    return;
-                }
-
-                String version = Iterables.getOnlyElement(specMap.keySet());
-                SyncgroupSpec spec = specMap.get(version);
-
-                if (spec.equals(lastSpec)) {
-                    return; // no changes, so no event should fire.
-                }
-                lastSpec = spec;
-
-                // Get the list of patterns that can read from the spec.
-                Permissions perms = spec.getPerms();
-                AccessList acl = perms.get(Constants.READ.getValue());
-                List<BlessingPattern> patterns = acl.getIn();
-
+            public Void apply(List<BlessingPattern> patterns) {
                 // Analyze these patterns to construct the emails, and fire the listener!
                 List<String> emails = parseEmailsFromPatterns(patterns);
                 mShareListMenuFragment.setSharedTo(emails);
+                return null;
             }
-        }, MEMBER_TIMER_DELAY, MEMBER_TIMER_PERIOD);
+        });
 
         // Watch the "showDone" boolean in the userdata collection and forward changes to the
         // listener.

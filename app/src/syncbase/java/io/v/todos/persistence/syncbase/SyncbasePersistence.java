@@ -14,11 +14,14 @@ import android.support.annotation.CallSuper;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
+import com.google.common.base.Function;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
@@ -30,6 +33,10 @@ import org.joda.time.Duration;
 import org.joda.time.format.DateTimeFormat;
 
 import java.io.File;
+import java.util.List;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -47,6 +54,9 @@ import io.v.todos.R;
 import io.v.todos.persistence.Persistence;
 import io.v.todos.sharing.NeighborhoodFragment;
 import io.v.todos.sharing.Sharing;
+import io.v.v23.InputChannel;
+import io.v.v23.InputChannelCallback;
+import io.v.v23.InputChannels;
 import io.v.v23.VFutures;
 import io.v.v23.context.VContext;
 import io.v.v23.rpc.Server;
@@ -65,6 +75,7 @@ import io.v.v23.syncbase.Database;
 import io.v.v23.syncbase.Syncbase;
 import io.v.v23.syncbase.SyncbaseService;
 import io.v.v23.syncbase.Syncgroup;
+import io.v.v23.syncbase.WatchChange;
 import io.v.v23.vdl.VdlStruct;
 import io.v.v23.verror.ExistException;
 import io.v.v23.verror.VException;
@@ -85,9 +96,12 @@ public class SyncbasePersistence implements Persistence {
             LIST_COLLECTION_SYNCGROUP_SUFFIX = "list_",
             DEFAULT_BLESSING_STRING = "dev.v.io:o:608941808256-43vtfndets79kf5hac8ieujto8837660" +
                     ".apps.googleusercontent.com:";
+    protected static final String LISTS_PREFIX = "lists_";
     protected static final long
             SHORT_TIMEOUT = 2500,
-            RETRY_DELAY = 2000;
+            RETRY_DELAY = 2000,
+            MEMBER_TIMER_DELAY = 100,
+            MEMBER_TIMER_PERIOD = 5000;
     public static final String
             USER_COLLECTION_NAME = "userdata",
             MOUNTPOINT = "/ns.dev.v.io:8101/tmp/todos/users/",
@@ -431,6 +445,7 @@ public class SyncbasePersistence implements Persistence {
 
     /**
      * Hook to insert or rebind fragments.
+     *
      * @param manager
      * @param transaction the fragment transaction to use to add fragments, or null if fragments are
      *                    being restored by the system.
@@ -478,13 +493,7 @@ public class SyncbasePersistence implements Persistence {
 
         VFutures.sync(Futures.dereference(blessings));
         appVInit(activity.getApplicationContext());
-        Future<?> initDiscovery = sExecutor.submit(new Callable<Void>() {
-            @Override
-            public Void call() throws VException {
-                Sharing.initDiscovery();
-                return null;
-            }
-        });
+        final SyncbasePersistence self = this;
         final Future<?> ensureCloudDatabaseExists = sExecutor.submit(new Runnable() {
             @Override
             public void run() {
@@ -496,7 +505,7 @@ public class SyncbasePersistence implements Persistence {
         ensureUserCollectionExists();
         VFutures.sync(ensureCloudDatabaseExists); // must finish before syncgroup setup
         ensureUserSyncgroupExists();
-        VFutures.sync(initDiscovery);
+        Sharing.initDiscovery(); // requires that db and collection exist
         sInitialized = true;
     }
 
@@ -514,5 +523,74 @@ public class SyncbasePersistence implements Persistence {
                 return "Unable to setup remote inspection: " + e;
             }
         }
+    }
+
+    public static void acceptSharedTodoList(final String listId, final String owner) {
+        sExecutor.submit(new Callable<Void>() {
+            @Override
+            public Void call() throws VException {
+                Boolean exists = VFutures.sync(sUserCollection.getRow(listId).exists
+                        (getAppVContext()));
+                if (!exists) {
+                    VFutures.sync(rememberTodoList(listId, owner));
+                }
+                return null;
+            }
+        });
+    }
+
+    protected static ListenableFuture<Void> rememberTodoList(String listId) {
+        return rememberTodoList(listId, getPersonalBlessingsString());
+    }
+
+    protected static ListenableFuture<Void> rememberTodoList(String listId, String owner) {
+        return sUserCollection.put(getAppVContext(), listId, owner, String.class);
+    }
+
+    public static ListenableFuture<Void> watchUserCollection(InputChannelCallback<WatchChange>
+                                                                     callback) {
+        InputChannel<WatchChange> watch = sDatabase.watch(getAppVContext(),
+                sUserCollection.id(), LISTS_PREFIX);
+        return InputChannels.withCallback(watch, callback);
+    }
+
+    public static Timer watchSharedTo(final String listId, final Function<List<BlessingPattern>,
+            Void>
+            callback) {
+        final Syncgroup sgHandle = sDatabase.getSyncgroup(new Id(getPersonalBlessingsString(),
+                computeListSyncgroupName(listId)));
+
+        Timer timer = new Timer();
+        timer.scheduleAtFixedRate(new TimerTask() {
+            private SyncgroupSpec lastSpec;
+
+            @Override
+            public void run() {
+                Map<String, SyncgroupSpec> specMap;
+                try {
+                    // Ok to block; we don't want to try parallel polls.
+                    specMap = VFutures.sync(sgHandle.getSpec(getAppVContext()));
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to get syncgroup spec for list: " + listId, e);
+                    return;
+                }
+
+                String version = Iterables.getOnlyElement(specMap.keySet());
+                SyncgroupSpec spec = specMap.get(version);
+
+                if (spec.equals(lastSpec)) {
+                    return; // no changes, so no event should fire.
+                }
+                Log.d(TAG, "Spec changed for list: " + listId);
+                lastSpec = spec;
+
+                Permissions perms = spec.getPerms();
+                AccessList acl = perms.get(Constants.READ.getValue());
+                List<BlessingPattern> patterns = acl.getIn();
+
+                callback.apply(patterns);
+            }
+        }, MEMBER_TIMER_DELAY, MEMBER_TIMER_PERIOD);
+        return timer;
     }
 }

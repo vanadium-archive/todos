@@ -47,14 +47,12 @@ import io.v.v23.syncbase.ChangeType;
 import io.v.v23.syncbase.Collection;
 import io.v.v23.syncbase.RowRange;
 import io.v.v23.syncbase.WatchChange;
-import io.v.v23.vdl.VdlAny;
 import io.v.v23.verror.NoExistException;
 import io.v.v23.verror.VException;
 
 public class SyncbaseMain extends SyncbasePersistence implements MainPersistence {
     private static final String
-            TAG = SyncbaseMain.class.getSimpleName(),
-            LISTS_PREFIX = "lists_";
+            TAG = SyncbaseMain.class.getSimpleName();
 
     private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.COLLECTION_ID, true);
     private final Map<String, MainListTracker> mTaskTrackers = new HashMap<>();
@@ -69,22 +67,30 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
         // Prepare a watch on top of the userdata collection to determine which todo lists need to
         // be tracked by this application.
-        InputChannel<WatchChange> watch = getDatabase().watch(getVContext(),
-                getUserCollection().id(), LISTS_PREFIX);
-        trap(InputChannels.withCallback(watch, new InputChannelCallback<WatchChange>() {
+        trap(watchUserCollection(new InputChannelCallback<WatchChange>() {
             @Override
             public ListenableFuture<Void> onNext(WatchChange change) {
                 final String listId = change.getRowName();
+                final String ownerBlessing = SyncbasePersistence.castFromSyncbase(change.getValue(),
+                        String.class);
 
                 if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
                     // (this is idempotent)
                     Log.d(TAG, listId + " removed from index");
                     deleteTodoList(listId);
                 } else {
+                    // If we are tracking this list already, don't bother doing anything.
+                    // This might happen if a same-user device did a simultaneous put into the
+                    // userdata collection.
+                    if (mTaskTrackers.get(listId) != null) {
+                        return null;
+                    }
+
                     mIdGenerator.registerId(change.getRowName().substring(LISTS_PREFIX.length()));
 
-                    Log.d(TAG, "Found a list id from userdata watch: " + listId);
-                    trap(Futures.catchingAsync(joinListSyncgroup(listId),
+                    Log.d(TAG, "Found a list id from userdata watch: " + listId + " with owner: "
+                            + ownerBlessing);
+                    trap(Futures.catchingAsync(joinListSyncgroup(listId, ownerBlessing),
                             SyncgroupJoinFailedException.class, new
                                     AsyncFunction<SyncgroupJoinFailedException, SyncgroupSpec>() {
                         public ListenableFuture<SyncgroupSpec> apply(@Nullable
@@ -100,7 +106,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
                                     // If this errors, then we will not get another chance to see
                                     // this syncgroup until the app is restarted.
-                                    return joinListSyncgroup(listId).get();
+                                    return joinListSyncgroup(listId, ownerBlessing).get();
                                 }
                             }, RETRY_DELAY, TimeUnit.MILLISECONDS);
                         }
@@ -108,12 +114,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
                     MainListTracker listTracker = new MainListTracker(getVContext(), getDatabase(),
                             listId, listener);
-                    if (mTaskTrackers.put(listId, listTracker) != null) {
-                        // List entries in the main collection are just ( list ID => nil ), so we
-                        // never expect updates other than an initial add...
-                        Log.w(TAG, "Unexpected update to " + USER_COLLECTION_NAME + " collection " +
-                                "for list " + listId);
-                    }
+                    mTaskTrackers.put(listId, listTracker);
 
                     // If the watch fails with NoExistException, the collection has been deleted.
                     Futures.addCallback(listTracker.watchFuture, new SyncTrappingCallback<Void>() {
@@ -152,8 +153,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                                     @Override
                                     public void onSuccess(@Nullable Void result) {
                                         // These can happen in either order.
-                                        trap(getUserCollection().put(getVContext(), listName, null,
-                                                VdlAny.class));
+                                        trap(rememberTodoList(listName));
                                         trap(listCollection.put(getVContext(),
                                                 SyncbaseTodoList.LIST_METADATA_ROW_NAME, listSpec,
                                                 ListSpec.class));
@@ -163,11 +163,10 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                 });
     }
 
-    private ListenableFuture<SyncgroupSpec> joinListSyncgroup(String listId) {
+    private ListenableFuture<SyncgroupSpec> joinListSyncgroup(String listId, String ownerBlessing) {
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
         String sgName = computeListSyncgroupName(listId);
-        String blessingStr = getPersonalBlessingsString();
-        return getDatabase().getSyncgroup(new Id(blessingStr, sgName)).join(getVContext(),
+        return getDatabase().getSyncgroup(new Id(ownerBlessing, sgName)).join(getVContext(),
                 CLOUD_NAME, CLOUD_BLESSING, memberInfo);
     }
 
