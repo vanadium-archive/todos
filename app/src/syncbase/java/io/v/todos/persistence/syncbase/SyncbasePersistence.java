@@ -99,7 +99,7 @@ public class SyncbasePersistence implements Persistence {
     protected static final String LISTS_PREFIX = "lists_";
     protected static final long
             SHORT_TIMEOUT = 2500,
-            RETRY_DELAY = 2000,
+            RETRY_DELAY = 300,
             MEMBER_TIMER_DELAY = 100,
             MEMBER_TIMER_PERIOD = 5000;
     public static final String

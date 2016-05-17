@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
@@ -53,6 +54,8 @@ import io.v.v23.verror.VException;
 public class SyncbaseMain extends SyncbasePersistence implements MainPersistence {
     private static final String
             TAG = SyncbaseMain.class.getSimpleName();
+
+    private static int DEFAULT_MAX_JOIN_ATTEMPTS = 5;
 
     private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.COLLECTION_ID, true);
     private final Map<String, MainListTracker> mTaskTrackers = new HashMap<>();
@@ -90,27 +93,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
                     Log.d(TAG, "Found a list id from userdata watch: " + listId + " with owner: "
                             + ownerBlessing);
-                    trap(Futures.catchingAsync(joinListSyncgroup(listId, ownerBlessing),
-                            SyncgroupJoinFailedException.class, new
-                                    AsyncFunction<SyncgroupJoinFailedException, SyncgroupSpec>() {
-                        public ListenableFuture<SyncgroupSpec> apply(@Nullable
-                                                                     SyncgroupJoinFailedException
-                                                                             input) throws
-                                Exception {
-                            Log.d(TAG, "Join failed. Sleeping and trying again: " + listId);
-                            return sExecutor.schedule(new Callable<SyncgroupSpec>() {
-
-                                @Override
-                                public SyncgroupSpec call() throws Exception {
-                                    Log.d(TAG, "Sleep done. Trying again: " + listId);
-
-                                    // If this errors, then we will not get another chance to see
-                                    // this syncgroup until the app is restarted.
-                                    return joinListSyncgroup(listId, ownerBlessing).get();
-                                }
-                            }, RETRY_DELAY, TimeUnit.MILLISECONDS);
-                        }
-                    }));
+                    trap(joinWithBackoff(listId, ownerBlessing));
 
                     MainListTracker listTracker = new MainListTracker(getVContext(), getDatabase(),
                             listId, listener);
@@ -168,6 +151,47 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         String sgName = computeListSyncgroupName(listId);
         return getDatabase().getSyncgroup(new Id(ownerBlessing, sgName)).join(getVContext(),
                 CLOUD_NAME, CLOUD_BLESSING, memberInfo);
+    }
+
+    private ListenableFuture<SyncgroupSpec> joinWithBackoff(String listId, String ownerBlessing) {
+        return joinWithBackoff(listId, ownerBlessing, 0, DEFAULT_MAX_JOIN_ATTEMPTS);
+    }
+
+    private ListenableFuture<SyncgroupSpec> joinWithBackoff(final String listId, final String
+            ownerBlessing, final int numTimes, final int limit) {
+        final String debugString = (numTimes + 1) + "/" + limit + " for: " + listId;
+        Log.d(TAG, "Join attempt " + debugString);
+        if (numTimes + 1 == limit) { // final attempt!
+            return joinListSyncgroup(listId, ownerBlessing);
+        }
+        final long delay = RETRY_DELAY * (1 << numTimes);
+        return Futures.catchingAsync(
+                joinListSyncgroup(listId, ownerBlessing),
+                SyncgroupJoinFailedException.class,
+                new AsyncFunction<SyncgroupJoinFailedException, SyncgroupSpec>() {
+                    public ListenableFuture<SyncgroupSpec> apply(@Nullable
+                                                                 SyncgroupJoinFailedException
+                                                                         input) {
+                        Log.d(TAG, "Join failed. Sleeping " + debugString + " with delay " + delay);
+                        return sExecutor.schedule(new Callable<SyncgroupSpec>() {
+
+
+                            @Override
+                            public SyncgroupSpec call() {
+                                Log.d(TAG, "Sleep done. Retry " + debugString);
+
+                                // If this errors, then we will not get another chance to
+                                // see this syncgroup until the app is restarted.
+                                try {
+                                    return joinWithBackoff(listId, ownerBlessing,
+                                            numTimes + 1, limit).get();
+                                } catch (InterruptedException | ExecutionException e) {
+                                    return null;
+                                }
+                            }
+                        }, delay, TimeUnit.MILLISECONDS);
+                    }
+                });
     }
 
     private ListenableFuture<Void> createListSyncgroup(Id id) {
