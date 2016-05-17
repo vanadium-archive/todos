@@ -3,18 +3,20 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context="io.v.todos.TodoListActivity">
     <item
-        android:id="@+id/show_done"
-        android:orderInCategory="101"
-        android:checkable="true"
-        android:title="@string/show_done" />
-    <item
-        android:id="@+id/action_edit"
         android:orderInCategory="102"
+        android:id="@+id/action_edit"
         android:title="@string/action_edit"
-        app:showAsAction="never" />
+        android:icon="@drawable/ic_create_white_24dp"
+        android:showAsAction="always" />
+    <item
+        android:id="@+id/show_done"
+        android:orderInCategory="104"
+        android:checkable="true"
+        android:title="@string/show_done"
+        android:showAsAction="never"/>
     <item
         android:id="@+id/action_debug"
-        android:orderInCategory="104"
+        android:orderInCategory="105"
         android:title="@string/action_debug"
-        app:showAsAction="never" />
+        android:showAsAction="never" />
 </menu>

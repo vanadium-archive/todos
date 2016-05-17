@@ -394,12 +394,17 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         verifyMockPersistence(mocked, 0, 0, 0, 1, 1, 0);
     }
 
-    private void tapMenuItem(int stringId) {
+    private void tapMenuItem(int itemId) {
+        // This item is visible in the action bar. It has no text, so refer to it by id.
+        onView(withId(itemId)).perform(click());
+    }
+
+    private void tapMenuItemInMenu(int stringId) {
         openActionBarOverflowOrOptionsMenu(mActivity);
 
         pause();
 
-        // The menu items don't know their own IDs, so we have to use their text to find them.
+        // Use the string id if it was in overflow/options. These don't have ids.
         onView(withText(stringId)).perform(click());
     }
 
@@ -421,7 +426,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         pause();
 
         // 1. DISMISS THE DIALOG
-        tapMenuItem(R.string.action_edit);
+        tapMenuItem(R.id.action_edit);
 
         pause();
 
@@ -434,7 +439,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         verifyMockPersistence(mocked);
 
         // 2. CANCEL THE DIALOG
-        tapMenuItem(R.string.action_edit);
+        tapMenuItem(R.id.action_edit);
 
         pause();
 
@@ -447,7 +452,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         verifyMockPersistence(mocked);
 
         // 3. PRESS SAVE
-        tapMenuItem(R.string.action_edit);
+        tapMenuItem(R.id.action_edit);
 
         pause();
 
@@ -460,7 +465,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         verifyMockPersistence(mocked, 1, 0, 0, 0, 0, 0);
 
         // 4. PRESS DELETE
-        tapMenuItem(R.string.action_edit);
+        tapMenuItem(R.id.action_edit);
 
         pause();
 
@@ -476,7 +481,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
     public void testTapMenuShowDone() {
         TodoListPersistence mocked = mockPersistence();
 
-        tapMenuItem(R.string.show_done);
+        tapMenuItemInMenu(R.string.show_done);
 
         pause();
 
