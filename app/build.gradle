@@ -75,7 +75,7 @@ dependencies {
             'com.android.support:appcompat-v7:23.1.1',
             'com.android.support:design:23.1.1',
             'com.android.support:cardview-v7:23.1.1',
-            'com.android.support:recyclerview-v7:23.1.1',
+            'com.android.support:recyclerview-v7:23.2.1',
             'com.google.guava:guava:19.0'
     )
     firebaseCompile 'com.firebase:firebase-client-android:2.5.2'

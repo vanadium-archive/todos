@@ -8,13 +8,12 @@ import android.app.Dialog;
 import android.app.DialogFragment;
 import android.app.FragmentManager;
 import android.content.DialogInterface;
-import android.graphics.Paint;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
+import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.RecyclerView;
 import android.view.KeyEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -25,11 +24,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -48,24 +43,23 @@ import io.v.v23.verror.VException;
  * allow entry of any value. Confirming this dialog sends the set of added and removed emails. Tap
  * to add/remove.
  */
-public class ShareListDialogFragment extends DialogFragment {
+public class ShareListDialogFragment extends DialogFragment
+        implements ContactAdapter.ContactTouchListener {
     public static final String FRAGMENT_TAG = ShareListDialogFragment.class.getSimpleName();
 
     public static ShareListDialogFragment find(FragmentManager fragmentManager) {
         return (ShareListDialogFragment) fragmentManager.findFragmentByTag(FRAGMENT_TAG);
     }
 
-    private Set<String> mRemoved;
-    private List<String> mNearby = new ArrayList<>();
-    private ArrayList<String> mTyped;
-    private Set<String> mAdded;
+    private RecyclerView mContacts;
+    private Set<String> mRemoved, mAdded, mRecent;
 
     private static final String
             REMOVED_KEY = "removedShares",
-            TYPED_KEY = "explicitShares",
-            ADDED_KEY = "addedShares";
+            ADDED_KEY = "addedShares",
+            RECENT_KEY = "recentShares";
 
-    private ContactAdapter mAlreadyAdapter, mPossibleAdapter;
+    private ContactAdapter mAdapter;
 
     private VContext mScanContext;
 
@@ -84,8 +78,8 @@ public class ShareListDialogFragment extends DialogFragment {
         super.onSaveInstanceState(outState);
 
         outState.putStringArrayList(REMOVED_KEY, new ArrayList<>(mRemoved));
-        outState.putStringArrayList(TYPED_KEY, mTyped);
         outState.putStringArrayList(ADDED_KEY, new ArrayList<>(mAdded));
+        outState.putStringArrayList(RECENT_KEY, new ArrayList<>(mRecent));
     }
 
     @Override
@@ -95,20 +89,30 @@ public class ShareListDialogFragment extends DialogFragment {
         if (savedInstanceState == null) {
             mRemoved = new HashSet<>();
             mAdded = new HashSet<>();
-            mTyped = new ArrayList<>();
+            mRecent = new HashSet<>();
         } else {
             mRemoved = new HashSet<>(savedInstanceState.getStringArrayList(REMOVED_KEY));
             mAdded = new HashSet<>(savedInstanceState.getStringArrayList(ADDED_KEY));
-            mTyped = savedInstanceState.getStringArrayList(TYPED_KEY);
+            mRecent = new HashSet<>(savedInstanceState.getStringArrayList(RECENT_KEY));
         }
 
-        mAlreadyAdapter = new ContactAdapter(getParent().getSharedTo(), mRemoved, true);
-        RecyclerView rvAlready = (RecyclerView) view.findViewById(R.id.recycler_already);
-        rvAlready.setAdapter(mAlreadyAdapter);
-        mNearby.clear();
-        final RecyclerView rvPossible = (RecyclerView) view.findViewById(R.id.recycler_possible);
-        mPossibleAdapter = new ContactAdapter(mNearby, mTyped, mAdded, false);
-        rvPossible.setAdapter(mPossibleAdapter);
+        mAdapter = new ContactAdapter(getParent().getSharedTo(), mAdded, mRemoved, mRecent);
+        mAdapter.setContactTouchListener(this);
+        mContacts = (RecyclerView) view.findViewById(R.id.recycler);
+        mContacts.setAdapter(mAdapter);
+        mContacts.setItemAnimator(new DefaultItemAnimator() {
+            @Override
+            public boolean animateAdd(RecyclerView.ViewHolder holder) {
+                dispatchAddFinished(holder);
+                return false;
+            }
+
+            @Override
+            public boolean animateRemove(RecyclerView.ViewHolder holder) {
+                dispatchRemoveFinished(holder);
+                return false;
+            }
+        });
 
         mScanContext = SyncbasePersistence.getAppVContext().withCancel();
         try {
@@ -116,39 +120,17 @@ public class ShareListDialogFragment extends DialogFragment {
                     Sharing.getDiscovery().scan(mScanContext,
                             "v.InterfaceName = \"" + Sharing.getPresenceInterface() + "\""),
                     new InputChannelCallback<Update>() {
-                        private final Map<String, Integer> counterMap = new HashMap<>();
-
                         @Override
                         public ListenableFuture<Void> onNext(Update result) {
                             final String email = Iterables.getOnlyElement(result.getAddresses());
-                            if (email == null) {
+                            if (email == null ||
+                                    email.equals(SyncbasePersistence.getPersonalEmail())) {
                                 return null;
                             }
-                            // Note: binarySearch returns -|correct insert index| - 1 if it fails
-                            // to find a match. For Java ints, this is the bitwise complement of the
-                            // "correct" insertion index.
-                            int searchIndex = Collections.binarySearch(mNearby, email);
                             if (result.isLost()) {
-                                Integer old = counterMap.get(email);
-                                counterMap.put(email, old == null ? 0 : Math.max(0, counterMap
-                                        .get(email) - 1));
-                                // Remove the email if the counter indicates that we should.
-                                if (counterMap.get(email) == 0 && searchIndex >= 0) {
-                                    mNearby.remove(searchIndex);
-                                    mPossibleAdapter.notifyItemRemoved(searchIndex);
-                                }
+                                mAdapter.onNearbyDeviceLost(email);
                             } else {
-                                Integer old = counterMap.get(email);
-                                counterMap.put(email, old == null ? 1 : counterMap.get(email) + 1);
-                                // Show the email if it's a new one and not equal to our email.
-                                // TODO(alexfandrianto): This still lets you see emails of those
-                                // nearby who you've already invited.
-                                if (searchIndex < 0 && !email.equals(getParent().getEmail())) {
-                                    int insertIndex = ~searchIndex;
-                                    mNearby.add(insertIndex, email);
-                                    //mNearby.add(email);
-                                    mPossibleAdapter.notifyItemInserted(insertIndex);
-                                }
+                                mAdapter.onNearbyDeviceDiscovered(email);
                             }
                             return null;
                         }
@@ -174,11 +156,7 @@ public class ShareListDialogFragment extends DialogFragment {
                 boolean handled = false;
                 if (actionId == EditorInfo.IME_ACTION_SEND) {
                     String email = editText.getText().toString();
-                    if (!mTyped.contains(email)) {
-                        mTyped.add(email);
-                    }
-                    mAdded.add(email);
-                    rvPossible.getAdapter().notifyDataSetChanged();
+                    mAdapter.onCustomShare(email);
                     editText.setText("");
                     handled = true;
                 }
@@ -190,6 +168,7 @@ public class ShareListDialogFragment extends DialogFragment {
                 .setView(view)
                 .setPositiveButton("Save", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
+                        mAdapter.filterDeltas();
                         getParent().persistence.shareTodoList(mAdded);
                         // TODO(alexfandrianto/rosswang): removal
                     }
@@ -207,90 +186,16 @@ public class ShareListDialogFragment extends DialogFragment {
     }
 
     public void onSharedToChanged() {
-        //TODO(rosswang)
-    }
-
-    private static class ContactAdapter extends RecyclerView.Adapter<ContactViewHolder> {
-        private final List<String> backup;
-        private final List<String> bonus;
-        private final Set<String> toggledOn;
-        private final boolean strikethrough; // If false, then bold.
-
-        public ContactAdapter(List<String> backup, Set<String> toggledOn, boolean strikethrough) {
-            super();
-            this.backup = backup;
-            this.bonus = null;
-            this.toggledOn = toggledOn;
-            this.strikethrough = strikethrough;
-        }
-
-        public ContactAdapter(List<String> backup, List<String> bonus, Set<String> toggledOn,
-                              boolean strikethrough) {
-            super();
-            this.backup = backup;
-            this.bonus = bonus;
-            this.toggledOn = toggledOn;
-            this.strikethrough = strikethrough;
-        }
-
-        @Override
-        public ContactViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            return new ContactViewHolder(new TextView(parent.getContext()));
-        }
-
-        @Override
-        public void onBindViewHolder(final ContactViewHolder holder, int position) {
-            final String name = position < backup.size() ? backup.get(position) :
-                    bonus.get(position - backup.size());
-            final boolean present = toggledOn.contains(name);
-            holder.bindString(name, present, strikethrough, new View.OnClickListener() {
-
-                @Override
-                public void onClick(View view) {
-                    if (present) {
-                        toggledOn.remove(name);
-                    } else {
-                        toggledOn.add(name);
-                    }
-                    notifyItemChanged(holder.getAdapterPosition());
-                }
-            });
-        }
-
-        @Override
-        public int getItemCount() {
-            int extra = bonus == null ? 0 : bonus.size();
-            return backup.size() + extra;
-        }
-    }
-
-    private static class ContactViewHolder extends RecyclerView.ViewHolder {
-        public ContactViewHolder(View itemView) {
-            super(itemView);
-        }
-
-        public void bindString(String name, boolean isActive, boolean strikethrough, View
-                .OnClickListener listener) {
-            TextView text = (TextView) itemView;
-
-            text.setText(name);
-            text.setTextSize(18);
-            if (strikethrough) {
-                if (isActive) {
-                    text.setPaintFlags(text.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-                } else {
-                    text.setPaintFlags(text.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-                }
-            } else {
-                // We should bold!
-                if (isActive) {
-                    text.setTypeface(null, 1); // 1 is bold
-                } else {
-                    text.setTypeface(null, 0); // 0 is default text style
-                }
+        mContacts.post(new Runnable() {
+            @Override
+            public void run() {
+                mAdapter.setSharedTo(getParent().getSharedTo());
             }
+        });
+    }
 
-            text.setOnClickListener(listener);
-        }
+    @Override
+    public void onContactTouch(RecyclerView.ViewHolder viewHolder) {
+        mAdapter.toggleContact(viewHolder.getAdapterPosition());
     }
 }
