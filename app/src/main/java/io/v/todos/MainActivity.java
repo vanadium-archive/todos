@@ -42,7 +42,6 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
     @Override
     protected void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getActionBar().setTitle(R.string.app_name);
         mEmptyView.setText(R.string.no_lists);
 
         // Set up the todo list adapter
@@ -54,6 +53,7 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
                 Intent intent = new Intent(MainActivity.this, TodoListActivity.class);
                 intent.putExtra(INTENT_SNACKOO_KEY, fbKey);
                 startActivity(intent);
+                overridePendingTransition(R.anim.right_slide_in, R.anim.left_slide_out);
             }
         });
 

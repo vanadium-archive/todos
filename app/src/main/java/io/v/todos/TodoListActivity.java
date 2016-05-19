@@ -42,6 +42,8 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
 
     protected void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getActionBar().setDisplayHomeAsUpEnabled(true);
+
         mEmptyView.setText(R.string.no_tasks);
 
         Intent intent = getIntent();
@@ -220,8 +222,21 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
             case R.id.action_debug:
                 sharePersistenceDebugDetails();
                 return true;
+            case android.R.id.home:
+                finishWithAnimation();
+                return true;
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onBackPressed() {
+        finishWithAnimation();
+    }
+
+    private void finishWithAnimation() {
+        this.finish();
+        overridePendingTransition(R.anim.left_slide_in, R.anim.right_slide_out);
     }
 }
