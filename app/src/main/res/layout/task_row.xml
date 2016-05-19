@@ -50,15 +50,14 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal">
 
-            <ImageView
+            <ImageButton
                 android:id="@+id/task_done"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:layout_margin="@dimen/fab_margin"
-                android:layout_weight="0"
-                android:src="@drawable/ic_done_black_24dp"
-                android:visibility="gone"/>
+                android:padding="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:layout_weight="0"/>
 
             <LinearLayout
                 android:layout_width="fill_parent"

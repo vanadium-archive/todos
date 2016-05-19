@@ -57,6 +57,13 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
 
                 initiateTaskEdit(key);
             }
+        }, new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String key = (String) view.getTag();
+
+                mPersistence.updateTask(snackoosList.findByKey(key).withToggleDone());
+            }
         });
 
         RecyclerView recyclerView = (RecyclerView) findViewById(R.id.recycler);

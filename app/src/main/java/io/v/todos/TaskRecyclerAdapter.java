@@ -19,14 +19,17 @@ import io.v.todos.model.Task;
 public class TaskRecyclerAdapter extends RecyclerView.Adapter<TaskViewHolder> {
     private ArrayList<Task> mBackup;
     private View.OnClickListener mItemListener;
+    private View.OnClickListener mDoneListener;
     private boolean mShowDone = true;
 
     private static final int RESOURCE_ID = R.layout.task_row;
 
-    public TaskRecyclerAdapter(ArrayList<Task> backup, View.OnClickListener itemListener) {
+    public TaskRecyclerAdapter(ArrayList<Task> backup, View.OnClickListener itemListener,
+                               View.OnClickListener doneListener) {
         super();
         mBackup = backup;
         mItemListener = itemListener;
+        mDoneListener = doneListener;
     }
 
     @Override
@@ -39,7 +42,7 @@ public class TaskRecyclerAdapter extends RecyclerView.Adapter<TaskViewHolder> {
     @Override
     public void onBindViewHolder(TaskViewHolder holder, int position) {
         Task task = mBackup.get(position);
-        holder.bindTask(task, mItemListener);
+        holder.bindTask(task, mItemListener, mDoneListener);
     }
 
     @Override
