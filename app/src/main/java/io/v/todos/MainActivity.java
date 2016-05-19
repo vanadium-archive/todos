@@ -61,24 +61,11 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
         mRecyclerView.setAdapter(mAdapter);
         mRecyclerView.setHasFixedSize(true);
 
-        new ItemTouchHelper(new SwipeableTouchHelperCallback() {
+        new ItemTouchHelper(new SwipeableTouchHelperCallback(0, ItemTouchHelper.LEFT) {
             @Override
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
                 String todoListKey = (String)viewHolder.itemView.getTag();
-                if (direction == ItemTouchHelper.RIGHT) {
-                    int position = mMainList.findIndexByKey(todoListKey);
-                    if (position == -1) {
-                        return;
-                    }
-                    ListMetadata l = mMainList.get(position);
-                    if (l.canCompleteAll()) {
-                        mPersistence.setCompletion(l, true);
-                    } else if (l.numTasks > 0) {
-                        mPersistence.setCompletion(l, false);
-                    } else {
-                        mAdapter.notifyItemChanged(position);
-                    }
-                } else if (direction == ItemTouchHelper.LEFT) {
+                if (direction == ItemTouchHelper.LEFT) {
                     mPersistence.deleteTodoList(todoListKey);
                 }
             }

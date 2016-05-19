@@ -13,9 +13,8 @@ import android.support.v7.widget.helper.ItemTouchHelper;
  * Subclasses should only override the onSwiped method since onMove is disabled.
  */
 public abstract class SwipeableTouchHelperCallback extends ItemTouchHelper.SimpleCallback {
-    SwipeableTouchHelperCallback() {
-        super(ItemTouchHelper.UP | ItemTouchHelper.DOWN,
-              ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT);
+    SwipeableTouchHelperCallback(int upDown, int leftRight) {
+        super(upDown, leftRight);
     }
 
     @Override

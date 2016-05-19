@@ -14,9 +14,7 @@ import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -27,26 +25,17 @@ import javax.annotation.Nullable;
 import io.v.impl.google.services.syncbase.SyncbaseServer;
 import io.v.todos.model.ListMetadata;
 import io.v.todos.model.ListSpec;
-import io.v.todos.model.TaskSpec;
 import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.MainPersistence;
-import io.v.v23.InputChannel;
 import io.v.v23.InputChannelCallback;
-import io.v.v23.InputChannels;
-import io.v.v23.VFutures;
 import io.v.v23.security.access.Permissions;
-import io.v.v23.services.syncbase.BatchOptions;
 import io.v.v23.services.syncbase.CollectionRow;
 import io.v.v23.services.syncbase.Id;
-import io.v.v23.services.syncbase.KeyValue;
 import io.v.v23.services.syncbase.SyncgroupJoinFailedException;
 import io.v.v23.services.syncbase.SyncgroupMemberInfo;
 import io.v.v23.services.syncbase.SyncgroupSpec;
-import io.v.v23.syncbase.Batch;
-import io.v.v23.syncbase.BatchDatabase;
 import io.v.v23.syncbase.ChangeType;
 import io.v.v23.syncbase.Collection;
-import io.v.v23.syncbase.RowRange;
 import io.v.v23.syncbase.WatchChange;
 import io.v.v23.verror.NoExistException;
 import io.v.v23.verror.VException;
@@ -217,44 +206,5 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         if (tracker != null) {
             trap(tracker.collection.destroy(getVContext()));
         }
-    }
-
-    @Override
-    public void setCompletion(ListMetadata listMetadata, final boolean done) {
-        final String listId = listMetadata.key;
-        trap(Batch.runInBatch(getVContext(), getDatabase(), new BatchOptions(),
-                new Batch.BatchOperation() {
-                    @Override
-                    public ListenableFuture<Void> run(final BatchDatabase db) {
-                        return sExecutor.submit(new Callable<Void>() {
-                            @Override
-                            public Void call() throws Exception {
-                                final Collection list = db.getCollection(getVContext(), listId);
-
-                                InputChannel<KeyValue> scan = list.scan(getVContext(),
-                                        RowRange.prefix(SyncbaseTodoList.TASKS_PREFIX));
-
-                                List<ListenableFuture<Void>> puts = new ArrayList<>();
-
-                                for (KeyValue kv : InputChannels.asIterable(scan)) {
-                                    TaskSpec taskSpec = castFromSyncbase(kv.getValue().getElem(),
-                                            TaskSpec.class);
-                                    if (taskSpec.getDone() != done) {
-                                        taskSpec.setDone(done);
-                                        puts.add(list.put(getVContext(), kv.getKey(), taskSpec,
-                                                TaskSpec.class));
-                                    }
-                                }
-
-                                if (!puts.isEmpty()) {
-                                    puts.add(SyncbaseTodoList.updateListTimestamp(
-                                            getVContext(), list));
-                                }
-                                VFutures.sync(Futures.allAsList(puts));
-                                return null;
-                            }
-                        });
-                    }
-                }));
     }
 }

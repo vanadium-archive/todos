@@ -61,7 +61,8 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
         recyclerView.setAdapter(mAdapter);
         recyclerView.setHasFixedSize(true);
 
-        new ItemTouchHelper(new SwipeableTouchHelperCallback() {
+        new ItemTouchHelper(new SwipeableTouchHelperCallback(0, ItemTouchHelper.LEFT |
+                ItemTouchHelper.RIGHT) {
             @Override
             public void onSwiped(final RecyclerView.ViewHolder viewHolder, final int direction) {
                 String fbKey = (String) viewHolder.itemView.getTag();
@@ -212,6 +213,9 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
                 return true;
             case R.id.action_edit:
                 initiateTodoListEdit();
+                return true;
+            case R.id.action_all_done:
+                mPersistence.completeTodoList();
                 return true;
             case R.id.action_debug:
                 sharePersistenceDebugDetails();

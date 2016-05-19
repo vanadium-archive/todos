@@ -11,7 +11,7 @@ import io.v.todos.model.TaskSpec;
 public interface TodoListPersistence extends Persistence {
     void updateTodoList(ListSpec listSpec);
     void deleteTodoList();
-    void shareTodoList(Iterable<String> emails);
+    void completeTodoList();
     void addTask(TaskSpec task);
     void updateTask(Task task);
     void deleteTask(String key);

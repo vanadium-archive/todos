@@ -35,15 +35,19 @@ import io.v.v23.InputChannel;
 import io.v.v23.InputChannelCallback;
 import io.v.v23.InputChannels;
 import io.v.v23.VFutures;
-import io.v.v23.context.VContext;
 import io.v.v23.security.BlessingPattern;
 import io.v.v23.security.access.AccessList;
 import io.v.v23.security.access.Constants;
 import io.v.v23.security.access.Permissions;
+import io.v.v23.services.syncbase.BatchOptions;
 import io.v.v23.services.syncbase.Id;
+import io.v.v23.services.syncbase.KeyValue;
 import io.v.v23.services.syncbase.SyncgroupSpec;
+import io.v.v23.syncbase.Batch;
+import io.v.v23.syncbase.BatchDatabase;
 import io.v.v23.syncbase.ChangeType;
 import io.v.v23.syncbase.Collection;
+import io.v.v23.syncbase.RowRange;
 import io.v.v23.syncbase.Syncgroup;
 import io.v.v23.syncbase.WatchChange;
 import io.v.v23.verror.NoExistException;
@@ -198,7 +202,6 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
                 computeListSyncgroupName(mList.id().getName())));
     }
 
-    @Override
     public void shareTodoList(final Iterable<String> emails) {
         // Get the syncgroup
         final Syncgroup sgHandle = getListSyncgroup();
@@ -238,6 +241,41 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
         }));
     }
 
+    @Override
+    public void completeTodoList() {
+        trap(Batch.runInBatch(getVContext(), getDatabase(), new BatchOptions(),
+                new Batch.BatchOperation() {
+                    @Override
+                    public ListenableFuture<Void> run(final BatchDatabase db) {
+                        return sExecutor.submit(new Callable<Void>() {
+                            @Override
+                            public Void call() throws Exception {
+                                InputChannel<KeyValue> scan = mList.scan(getVContext(),
+                                        RowRange.prefix(SyncbaseTodoList.TASKS_PREFIX));
+
+                                List<ListenableFuture<Void>> puts = new ArrayList<>();
+
+                                for (KeyValue kv : InputChannels.asIterable(scan)) {
+                                    TaskSpec taskSpec = castFromSyncbase(kv.getValue().getElem(),
+                                            TaskSpec.class);
+                                    if (!taskSpec.getDone()) {
+                                        taskSpec.setDone(true);
+                                        puts.add(mList.put(getVContext(), kv.getKey(), taskSpec,
+                                                TaskSpec.class));
+                                    }
+                                }
+
+                                if (!puts.isEmpty()) {
+                                    puts.add(updateListTimestamp());
+                                }
+                                VFutures.sync(Futures.allAsList(puts));
+                                return null;
+                            }
+                        });
+                    }
+                }));
+    }
+
     // TODO(alexfandrianto): We should consider moving this helper into the main Java repo.
     // https://github.com/vanadium/issues/issues/1321
     // TODO(alexfandrianto): This allows you to repeatedly add the same blessings to the permission
@@ -251,40 +289,36 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
         perms.put(tag, acl);
     }
 
-    public static ListenableFuture<Void> updateListTimestamp(final VContext vContext,
-                                                             final Collection list) {
-        ListenableFuture<Object> get = list.get(vContext, LIST_METADATA_ROW_NAME, ListSpec.class);
+    public ListenableFuture<Void> updateListTimestamp() {
+        ListenableFuture<Object> get = mList.get(getVContext(), LIST_METADATA_ROW_NAME,
+                ListSpec.class);
         return Futures.transformAsync(get, new AsyncFunction<Object, Void>() {
             @Override
             public ListenableFuture<Void> apply(Object oldValue) throws Exception {
                 ListSpec listSpec = (ListSpec) oldValue;
                 listSpec.setUpdatedAt(System.currentTimeMillis());
-                return list.put(vContext, LIST_METADATA_ROW_NAME, listSpec, ListSpec.class);
+                return mList.put(getVContext(), LIST_METADATA_ROW_NAME, listSpec, ListSpec.class);
             }
         });
-    }
-
-    private void updateListTimestamp() {
-        trap(updateListTimestamp(getVContext(), mList));
     }
 
     @Override
     public void addTask(TaskSpec task) {
         trap(mList.put(getVContext(), TASKS_PREFIX + mIdGenerator.generateTailId(), task,
                 TaskSpec.class));
-        updateListTimestamp();
+        trap(updateListTimestamp());
     }
 
     @Override
     public void updateTask(Task task) {
         trap(mList.put(getVContext(), task.key, task.toSpec(), TaskSpec.class));
-        updateListTimestamp();
+        trap(updateListTimestamp());
     }
 
     @Override
     public void deleteTask(String key) {
         trap(mList.delete(getVContext(), key));
-        updateListTimestamp();
+        trap(updateListTimestamp());
     }
 
     @Override

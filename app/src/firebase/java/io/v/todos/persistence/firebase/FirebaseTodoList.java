@@ -12,6 +12,8 @@ import com.firebase.client.ChildEventListener;
 import com.firebase.client.DataSnapshot;
 import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
+import com.firebase.client.MutableData;
+import com.firebase.client.Transaction;
 import com.firebase.client.ValueEventListener;
 
 import io.v.todos.model.ListSpec;
@@ -85,8 +87,32 @@ public class FirebaseTodoList extends FirebasePersistence implements TodoListPer
     }
 
     @Override
-    public void shareTodoList(Iterable<String> emails) {
-        // Not implemented.
+    public void completeTodoList() {
+        // Update all child tasks for this key to have done = true.
+        Firebase tasksRef = mTasks;
+        tasksRef.runTransaction(new Transaction.Handler() {
+            @Override
+            public Transaction.Result doTransaction(MutableData mutableData) {
+                // Note: This is very easy to make conflicts with. It may be better to avoid doing
+                // this in a batch or to split up the Task into components.
+                for (MutableData taskData : mutableData.getChildren()) {
+                    TaskSpec spec = taskData.getValue(TaskSpec.class);
+                    if (!spec.getDone()) {
+                        spec.setDone(true);
+                    }
+                    taskData.setValue(spec);
+                }
+                return Transaction.success(mutableData);
+            }
+
+            @Override
+            public void onComplete(FirebaseError firebaseError, boolean b,
+                                   DataSnapshot dataSnapshot) {
+            }
+        });
+
+        // Further, update this todo list to set its last updated time.
+        updateListTimestamp();
     }
 
     private void updateListTimestamp() {

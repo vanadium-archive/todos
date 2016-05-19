@@ -2,6 +2,7 @@
     <string name="action_debug">Debug DB</string>
     <string name="action_edit">Edit List</string>
     <string name="action_share">Share List</string>
+    <string name="action_all_done">Mark All Done</string>
     <string name="show_done">Show Done</string>
     <string name="set_button">Set</string>
     <string name="add_button">Add</string>

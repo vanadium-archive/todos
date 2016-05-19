@@ -59,10 +59,6 @@ public final class PersistenceFactory {
         }
 
         @Override
-        public void setCompletion(ListMetadata listMetadata, boolean done) {
-        }
-
-        @Override
         public void close() {
         }
 
@@ -82,7 +78,7 @@ public final class PersistenceFactory {
         }
 
         @Override
-        public void shareTodoList(Iterable<String> emails) {
+        public void completeTodoList() {
         }
 
         @Override

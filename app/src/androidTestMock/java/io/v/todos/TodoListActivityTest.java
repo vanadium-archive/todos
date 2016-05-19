@@ -78,10 +78,12 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
     }
 
     // Helper to verify the number of calls that occurred on the mock.
-    private void verifyMockPersistence(TodoListPersistence mocked, int updateTodoList, int
-            deleteTodoList, int addTask, int updateTask, int deleteTask, int setShowDone) {
+    private void verifyMockPersistence(TodoListPersistence mocked, int updateTodoList,
+            int deleteTodoList, int completeTodoList, int addTask, int updateTask, int deleteTask,
+            int setShowDone) {
         verify(mocked, times(updateTodoList)).updateTodoList(any(ListSpec.class));
         verify(mocked, times(deleteTodoList)).deleteTodoList();
+        verify(mocked, times(completeTodoList)).completeTodoList();
         verify(mocked, times(addTask)).addTask(any(TaskSpec.class));
         verify(mocked, times(updateTask)).updateTask(any(Task.class));
         verify(mocked, times(deleteTask)).deleteTask(anyString());
@@ -99,7 +101,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
 
         assertFalse(dialog.isShowing());
 
-        verifyMockPersistence(mocked, 0, 0, 1, 0, 0, 0);
+        verifyMockPersistence(mocked, 0, 0, 0, 1, 0, 0, 0);
     }
 
     // Press the fab but don't actually add the item.
@@ -310,7 +312,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
 
         pause();
 
-        verifyMockPersistence(mocked, 0, 0, 0, 1, 0, 0);
+        verifyMockPersistence(mocked, 0, 0, 0, 0, 1, 0, 0);
     }
 
     // Swipe a task item to the left to attempt to delete it.
@@ -326,7 +328,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
 
         pause();
 
-        verifyMockPersistence(mocked, 0, 0, 0, 0, 1, 0);
+        verifyMockPersistence(mocked, 0, 0, 0, 0, 0, 1, 0);
     }
 
     // Tap a todo list item to enter its edit dialog. Tests dismiss, cancel, save, and delete.
@@ -377,7 +379,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         pause();
         assertFalse(dialog.isShowing());
 
-        verifyMockPersistence(mocked, 0, 0, 0, 1, 0, 0);
+        verifyMockPersistence(mocked, 0, 0, 0, 0, 1, 0, 0);
 
         // 4. DO UI INTERACTION (AND THEN DELETE!)
         onView(withId(R.id.recycler)).perform(RecyclerViewActions.actionOnItemAtPosition(1, click
@@ -391,12 +393,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         pause();
         assertFalse(dialog.isShowing());
 
-        verifyMockPersistence(mocked, 0, 0, 0, 1, 1, 0);
-    }
-
-    private void tapMenuItem(int itemId) {
-        // This item is visible in the action bar. It has no text, so refer to it by id.
-        onView(withId(itemId)).perform(click());
+        verifyMockPersistence(mocked, 0, 0, 0, 0, 1, 1, 0);
     }
 
     private void tapMenuItemInMenu(int stringId) {
@@ -426,7 +423,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         pause();
 
         // 1. DISMISS THE DIALOG
-        tapMenuItem(R.id.action_edit);
+        tapMenuItemInMenu(R.string.action_edit);
 
         pause();
 
@@ -439,7 +436,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         verifyMockPersistence(mocked);
 
         // 2. CANCEL THE DIALOG
-        tapMenuItem(R.id.action_edit);
+        tapMenuItemInMenu(R.string.action_edit);
 
         pause();
 
@@ -452,7 +449,7 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         verifyMockPersistence(mocked);
 
         // 3. PRESS SAVE
-        tapMenuItem(R.id.action_edit);
+        tapMenuItemInMenu(R.string.action_edit);
 
         pause();
 
@@ -462,10 +459,10 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         pause();
         assertFalse(dialog.isShowing());
 
-        verifyMockPersistence(mocked, 1, 0, 0, 0, 0, 0);
+        verifyMockPersistence(mocked, 1, 0, 0, 0, 0, 0, 0);
 
         // 4. PRESS DELETE
-        tapMenuItem(R.id.action_edit);
+        tapMenuItemInMenu(R.string.action_edit);
 
         pause();
 
@@ -475,7 +472,17 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
         pause();
         assertFalse(dialog.isShowing());
 
-        verifyMockPersistence(mocked, 1, 1, 0, 0, 0, 0);
+        verifyMockPersistence(mocked, 1, 1, 0, 0, 0, 0, 0);
+    }
+
+    public void testTapMenuMarkAllDone() {
+        TodoListPersistence mocked = mockPersistence();
+
+        tapMenuItemInMenu(R.string.action_all_done);
+
+        pause();
+
+        verifyMockPersistence(mocked, 0, 0, 1, 0, 0, 0, 0);
     }
 
     public void testTapMenuShowDone() {
@@ -485,6 +492,6 @@ public class TodoListActivityTest extends ActivityInstrumentationTestCase2<TodoL
 
         pause();
 
-        verifyMockPersistence(mocked, 0, 0, 0, 0, 0, 1);
+        verifyMockPersistence(mocked, 0, 0, 0, 0, 0, 0, 1);
     }
 }

@@ -9,9 +9,6 @@ import android.content.Context;
 import com.firebase.client.ChildEventListener;
 import com.firebase.client.DataSnapshot;
 import com.firebase.client.Firebase;
-import com.firebase.client.FirebaseError;
-import com.firebase.client.MutableData;
-import com.firebase.client.Transaction;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -21,7 +18,6 @@ import java.util.Set;
 import io.v.todos.model.ListMetadata;
 import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
-import io.v.todos.model.TaskSpec;
 import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.MainPersistence;
 
@@ -81,35 +77,6 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
         // After deleting the list itself, delete all the orphaned tasks!
         Firebase tasksRef = getFirebase().child(FirebaseTodoList.TASKS).child(key);
         tasksRef.removeValue();
-    }
-
-    @Override
-    public void setCompletion(final ListMetadata listMetadata, final boolean done) {
-        // Update all child tasks for this key to have done = true.
-        Firebase tasksRef = getFirebase().child(FirebaseTodoList.TASKS).child(listMetadata.key);
-        tasksRef.runTransaction(new Transaction.Handler() {
-            @Override
-            public Transaction.Result doTransaction(MutableData mutableData) {
-                // Note: This is very easy to make conflicts with. It may be better to avoid doing
-                // this in a batch or to split up the Task into components.
-                for (MutableData taskData : mutableData.getChildren()) {
-                    TaskSpec spec = taskData.getValue(TaskSpec.class);
-                    spec.setDone(done);
-                    taskData.setValue(spec);
-                }
-                return Transaction.success(mutableData);
-            }
-
-            @Override
-            public void onComplete(FirebaseError firebaseError, boolean b,
-                                   DataSnapshot dataSnapshot) {
-            }
-        });
-
-        // Further, update this todo list to set its last updated time.
-        ListSpec spec = listMetadata.toSpec();
-        spec.setUpdatedAt(System.currentTimeMillis());
-        mTodoLists.child(listMetadata.key).setValue(spec);
     }
 
     private ListMetadata updateListSpec(String key, ListSpec updatedSpec) {
