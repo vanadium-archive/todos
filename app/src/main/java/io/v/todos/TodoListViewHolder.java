@@ -4,6 +4,7 @@
 
 package io.v.todos;
 
+import android.graphics.Paint;
 import android.view.View;
 import android.widget.TextView;
 
@@ -25,28 +26,30 @@ public class TodoListViewHolder extends SwipeableCardViewHolder {
     public void bindTodoList(ListMetadata listMetadata, View.OnClickListener listener) {
         mName.setText(listMetadata.name);
         mCompletedStatus.setText(computeCompleted(listMetadata));
+        if (listMetadata.isDone()) {
+            mName.setPaintFlags(mName.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+            mName.setTextColor(mName.getTextColors().withAlpha(UIUtil.ALPHA_HINT));
+        } else {
+            mName.setPaintFlags(mName.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+            mName.setTextColor(mName.getTextColors().withAlpha(UIUtil.ALPHA_PRIMARY));
+        }
         mTimeAgo.setText(computeTimeAgo(listMetadata));
 
-        getCardView().setCardBackgroundColor(listMetadata.isDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
+        //getCardView().setCardBackgroundColor(listMetadata.isDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
 
         itemView.setTag(listMetadata.key);
         itemView.setOnClickListener(listener);
     }
 
     private String computeTimeAgo(ListMetadata listMetadata) {
-        return UIUtil.computeTimeAgo(getCardView().getContext(), "Last Updated",
-                listMetadata.updatedAt);
+        return UIUtil.computeTimeAgo(getCardView().getContext(), listMetadata.updatedAt);
     }
 
     private String computeCompleted(ListMetadata listMetadata) {
-        if (listMetadata.isDone()) {
-            return "Done!";
-        } else if (listMetadata.numTasks == 0) {
-            return "Needs Tasks";
-        } else if (listMetadata.numCompleted == 0) {
-            return "Not Started";
+        if (listMetadata.numTasks == 0) {
+            return "No Tasks";
         } else {
-            return listMetadata.numCompleted + " of " + listMetadata.numTasks;
+            return listMetadata.numCompleted + "/" + listMetadata.numTasks + " completed";
         }
     }
 

@@ -25,7 +25,9 @@
             android:layout_height="match_parent"
             android:gravity="center"
             android:alpha="0"
-            android:visibility="gone"/>
+            android:visibility="gone"
+            android:textColor="#E0FFFFFF"
+            android:background="@color/colorPrimaryLight"/>
     </FrameLayout>
 
     <android.support.design.widget.FloatingActionButton

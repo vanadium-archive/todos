@@ -9,7 +9,7 @@
     <string name="init_persistence">Initializing&#8230;</string>
     <string name="no_lists">No todo lists.\nPress \'+\' to add lists.</string>
     <string name="no_tasks">No tasks.\nPress \'+\' to add tasks.</string>
-    <string name="just_now">Just now</string>
+    <string name="just_now">Now</string>
     <string name="email_debug_subject">Debug the persistence layer</string>
     <string name="no_email_client">An app to share emails is not installed, cannot send debug request</string>
     <!-- Errors -->

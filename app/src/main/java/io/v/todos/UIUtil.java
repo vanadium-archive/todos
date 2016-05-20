@@ -31,12 +31,17 @@ public final class UIUtil {
     private UIUtil() {
     }
 
-    private static final long JUST_NOW_DURATION = 60 * 1000 - 1;
 
-    public static String computeTimeAgo(Context context, String prefix, long startTime) {
+    private static final long JUST_NOW_DURATION = 60 * 60 * 1000 - 1;
+    public static final int ALPHA_PRIMARY = (int)(255 * 0.87);
+    public static final int ALPHA_SECONDARY = (int)(255 * 0.54);
+    public static final int ALPHA_HINT = (int)(255 * 0.38);
+
+    public static String computeTimeAgo(Context context, long startTime) {
         long now = System.currentTimeMillis();
-        return prefix + ": " + (now - startTime > JUST_NOW_DURATION ?
-                DateUtils.getRelativeTimeSpanString(startTime, now, DateUtils.MINUTE_IN_MILLIS) :
+        return (now - startTime > JUST_NOW_DURATION ?
+                DateUtils.getRelativeTimeSpanString(startTime, now, DateUtils.HOUR_IN_MILLIS, DateUtils.FORMAT_ABBREV_ALL).
+                        toString() :
                 context.getString(R.string.just_now));
     }
 

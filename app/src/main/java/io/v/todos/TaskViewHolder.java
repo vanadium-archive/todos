@@ -4,6 +4,7 @@
 
 package io.v.todos;
 
+import android.graphics.Paint;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -28,17 +29,24 @@ public class TaskViewHolder extends SwipeableCardViewHolder {
 
         final TextView name=(TextView) itemView.findViewById(R.id.task_text);
         name.setText(task.text);
+        if (task.done) {
+            name.setPaintFlags(name.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+            name.setTextColor(name.getTextColors().withAlpha(UIUtil.ALPHA_HINT));
+        } else {
+            name.setPaintFlags(name.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+            name.setTextColor(name.getTextColors().withAlpha(UIUtil.ALPHA_PRIMARY));
+        }
 
         final TextView created=(TextView) itemView.findViewById(R.id.task_time);
         created.setText(computeCreated(task));
 
-        getCardView().setCardBackgroundColor(task.done ? 0xFFCCCCCC : 0xFFFFFFFF);
+        //getCardView().setCardBackgroundColor(task.done ? 0xFFCCCCCC : 0xFFFFFFFF);
 
         itemView.setTag(task.key);
         itemView.setOnClickListener(itemListener);
     }
 
     private String computeCreated(Task task) {
-        return UIUtil.computeTimeAgo(getCardView().getContext(), "Created", task.addedAt);
+        return UIUtil.computeTimeAgo(getCardView().getContext(), task.addedAt);
     }
 }
