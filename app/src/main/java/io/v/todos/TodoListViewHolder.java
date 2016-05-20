@@ -35,8 +35,6 @@ public class TodoListViewHolder extends SwipeableCardViewHolder {
         }
         mTimeAgo.setText(computeTimeAgo(listMetadata));
 
-        //getCardView().setCardBackgroundColor(listMetadata.isDone() ? 0xFFCCCCCC : 0xFFFFFFFF);
-
         itemView.setTag(listMetadata.key);
         itemView.setOnClickListener(listener);
     }

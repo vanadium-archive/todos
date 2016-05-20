@@ -40,8 +40,6 @@ public class TaskViewHolder extends SwipeableCardViewHolder {
         final TextView created=(TextView) itemView.findViewById(R.id.task_time);
         created.setText(computeCreated(task));
 
-        //getCardView().setCardBackgroundColor(task.done ? 0xFFCCCCCC : 0xFFFFFFFF);
-
         itemView.setTag(task.key);
         itemView.setOnClickListener(itemListener);
     }

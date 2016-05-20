@@ -39,9 +39,10 @@ public final class UIUtil {
 
     public static String computeTimeAgo(Context context, long startTime) {
         long now = System.currentTimeMillis();
+        // TODO(alexfandrianto): We could use even shorter strings for times.
         return (now - startTime > JUST_NOW_DURATION ?
-                DateUtils.getRelativeTimeSpanString(startTime, now, DateUtils.HOUR_IN_MILLIS, DateUtils.FORMAT_ABBREV_ALL).
-                        toString() :
+                DateUtils.getRelativeTimeSpanString(startTime, now, DateUtils.HOUR_IN_MILLIS,
+                        DateUtils.FORMAT_ABBREV_ALL).toString() :
                 context.getString(R.string.just_now));
     }
 
