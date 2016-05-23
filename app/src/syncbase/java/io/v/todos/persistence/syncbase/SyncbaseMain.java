@@ -14,6 +14,7 @@ import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -127,8 +128,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                                         // These can happen in either order.
                                         trap(rememberTodoList(listName));
                                         trap(listCollection.put(getVContext(),
-                                                SyncbaseTodoList.LIST_METADATA_ROW_NAME, listSpec,
-                                                ListSpec.class));
+                                                SyncbaseTodoList.LIST_METADATA_ROW_NAME, listSpec));
                                     }
                                 });
                     }
@@ -139,7 +139,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
         String sgName = computeListSyncgroupName(listId);
         return getDatabase().getSyncgroup(new Id(ownerBlessing, sgName)).join(getVContext(),
-                CLOUD_NAME, CLOUD_BLESSING, memberInfo);
+                CLOUD_NAME, Arrays.asList(CLOUD_BLESSING), memberInfo);
     }
 
     private ListenableFuture<SyncgroupSpec> joinWithBackoff(String listId, String ownerBlessing) {
@@ -193,7 +193,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
         SyncgroupSpec spec = new SyncgroupSpec(
                 "TODOs User Data Collection", CLOUD_NAME, permissions,
-                ImmutableList.of(new CollectionRow(id, "")),
+                ImmutableList.of(id),
                 ImmutableList.of(MOUNTPOINT), false);
         String blessingStr = getPersonalBlessingsString();
         return getDatabase().getSyncgroup(new Id(blessingStr, sgName)).create(getVContext(),

@@ -21,7 +21,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
@@ -33,6 +32,7 @@ import org.joda.time.Duration;
 import org.joda.time.format.DateTimeFormat;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
@@ -66,6 +66,7 @@ import io.v.v23.security.access.AccessList;
 import io.v.v23.security.access.Constants;
 import io.v.v23.security.access.Permissions;
 import io.v.v23.services.syncbase.CollectionRow;
+import io.v.v23.services.syncbase.CollectionRowPattern;
 import io.v.v23.services.syncbase.Id;
 import io.v.v23.services.syncbase.SyncgroupJoinFailedException;
 import io.v.v23.services.syncbase.SyncgroupMemberInfo;
@@ -76,6 +77,7 @@ import io.v.v23.syncbase.Syncbase;
 import io.v.v23.syncbase.SyncbaseService;
 import io.v.v23.syncbase.Syncgroup;
 import io.v.v23.syncbase.WatchChange;
+import io.v.v23.syncbase.util.Util;
 import io.v.v23.vdl.VdlStruct;
 import io.v.v23.verror.ExistException;
 import io.v.v23.verror.VException;
@@ -342,14 +344,14 @@ public class SyncbasePersistence implements Persistence {
 
                 try {
                     Log.d(TAG, "Trying to join the syncgroup: " + sgName);
-                    VFutures.sync(sgHandle.join(getAppVContext(), CLOUD_NAME, CLOUD_BLESSING,
+                    VFutures.sync(sgHandle.join(getAppVContext(), CLOUD_NAME, Arrays.asList(CLOUD_BLESSING),
                             memberInfo));
                     Log.d(TAG, "JOINED the syncgroup: " + sgName);
                 } catch (SyncgroupJoinFailedException e) {
                     Log.w(TAG, "Failed join. Trying to create the syncgroup: " + sgName, e);
                     SyncgroupSpec spec = new SyncgroupSpec(
                             "TODOs User Data Collection", CLOUD_NAME, permissions,
-                            ImmutableList.of(new CollectionRow(sUserCollection.id(), "")),
+                            ImmutableList.of(sUserCollection.id()),
                             ImmutableList.of(MOUNTPOINT), false);
                     try {
                         VFutures.sync(sgHandle.create(getAppVContext(), spec, memberInfo));
@@ -544,13 +546,13 @@ public class SyncbasePersistence implements Persistence {
     }
 
     protected static ListenableFuture<Void> rememberTodoList(String listId, String owner) {
-        return sUserCollection.put(getAppVContext(), listId, owner, String.class);
+        return sUserCollection.put(getAppVContext(), listId, owner);
     }
 
     public static ListenableFuture<Void> watchUserCollection(InputChannelCallback<WatchChange>
                                                                      callback) {
         InputChannel<WatchChange> watch = sDatabase.watch(getAppVContext(),
-                sUserCollection.id(), LISTS_PREFIX);
+                ImmutableList.of(Util.rowPrefixPattern(sUserCollection.id(), LISTS_PREFIX)));
         return InputChannels.withCallback(watch, callback);
     }
 

@@ -7,6 +7,7 @@ package io.v.todos.persistence.syncbase;
 import android.support.annotation.NonNull;
 import android.util.Log;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -28,6 +29,7 @@ import io.v.v23.syncbase.ChangeType;
 import io.v.v23.syncbase.Collection;
 import io.v.v23.syncbase.Database;
 import io.v.v23.syncbase.WatchChange;
+import io.v.v23.syncbase.util.Util;
 import io.v.v23.verror.NoExistException;
 
 /**
@@ -50,7 +52,8 @@ public class MainListTracker {
                            ListEventListener<ListMetadata> listener) {
         collection = database.getCollection(vContext, listId);
         mListener = listener;
-        InputChannel<WatchChange> watch = database.watch(vContext, collection.id(), "");
+        InputChannel<WatchChange> watch = database.watch(vContext,
+                ImmutableList.of(Util.rowPrefixPattern(collection.id(), "")));
         watchFuture = InputChannels.withCallback(watch, new InputChannelCallback<WatchChange>() {
             @Override
             public ListenableFuture<Void> onNext(WatchChange change) {

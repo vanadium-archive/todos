@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 
 import com.google.common.base.Function;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
@@ -50,6 +51,7 @@ import io.v.v23.syncbase.Collection;
 import io.v.v23.syncbase.RowRange;
 import io.v.v23.syncbase.Syncgroup;
 import io.v.v23.syncbase.WatchChange;
+import io.v.v23.syncbase.util.Util;
 import io.v.v23.verror.NoExistException;
 import io.v.v23.verror.VException;
 
@@ -94,7 +96,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
         mListener = listener;
 
         mList = getDatabase().getCollection(getVContext(), listId);
-        InputChannel<WatchChange> listWatch = getDatabase().watch(getVContext(), mList.id(), "");
+        InputChannel<WatchChange> listWatch = getDatabase().watch(getVContext(),
+                ImmutableList.of(Util.rowPrefixPattern(mList.id(), "")));
         ListenableFuture<Void> listWatchFuture = InputChannels.withCallback(listWatch,
                 new InputChannelCallback<WatchChange>() {
                     @Override
@@ -128,7 +131,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
         // Watch the "showDone" boolean in the userdata collection and forward changes to the
         // listener.
         InputChannel<WatchChange> showDoneWatch = getDatabase()
-                .watch(getVContext(), getUserCollection().id(), SHOW_DONE_ROW_NAME);
+                .watch(getVContext(), ImmutableList.of(
+                        Util.rowPrefixPattern(getUserCollection().id(), SHOW_DONE_ROW_NAME)));
         trap(InputChannels.withCallback(showDoneWatch, new InputChannelCallback<WatchChange>() {
             @Override
             public ListenableFuture<Void> onNext(WatchChange result) {
@@ -188,7 +192,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
 
     @Override
     public void updateTodoList(ListSpec listSpec) {
-        trap(mList.put(getVContext(), LIST_METADATA_ROW_NAME, listSpec, ListSpec.class));
+        trap(mList.put(getVContext(), LIST_METADATA_ROW_NAME, listSpec));
     }
 
     @Override
@@ -260,8 +264,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
                                             TaskSpec.class);
                                     if (!taskSpec.getDone()) {
                                         taskSpec.setDone(true);
-                                        puts.add(mList.put(getVContext(), kv.getKey(), taskSpec,
-                                                TaskSpec.class));
+                                        puts.add(mList.put(getVContext(), kv.getKey(), taskSpec));
                                     }
                                 }
 
@@ -290,28 +293,27 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     }
 
     public ListenableFuture<Void> updateListTimestamp() {
-        ListenableFuture<Object> get = mList.get(getVContext(), LIST_METADATA_ROW_NAME,
+        ListenableFuture<io.v.todos.model.ListSpec> get = mList.get(getVContext(), LIST_METADATA_ROW_NAME,
                 ListSpec.class);
         return Futures.transformAsync(get, new AsyncFunction<Object, Void>() {
             @Override
             public ListenableFuture<Void> apply(Object oldValue) throws Exception {
                 ListSpec listSpec = (ListSpec) oldValue;
                 listSpec.setUpdatedAt(System.currentTimeMillis());
-                return mList.put(getVContext(), LIST_METADATA_ROW_NAME, listSpec, ListSpec.class);
+                return mList.put(getVContext(), LIST_METADATA_ROW_NAME, listSpec);
             }
         });
     }
 
     @Override
     public void addTask(TaskSpec task) {
-        trap(mList.put(getVContext(), TASKS_PREFIX + mIdGenerator.generateTailId(), task,
-                TaskSpec.class));
+        trap(mList.put(getVContext(), TASKS_PREFIX + mIdGenerator.generateTailId(), task));
         trap(updateListTimestamp());
     }
 
     @Override
     public void updateTask(Task task) {
-        trap(mList.put(getVContext(), task.key, task.toSpec(), TaskSpec.class));
+        trap(mList.put(getVContext(), task.key, task.toSpec()));
         trap(updateListTimestamp());
     }
 
@@ -323,6 +325,6 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
 
     @Override
     public void setShowDone(boolean showDone) {
-        trap(getUserCollection().put(getVContext(), SHOW_DONE_ROW_NAME, showDone, Boolean.TYPE));
+        trap(getUserCollection().put(getVContext(), SHOW_DONE_ROW_NAME, showDone));
     }
 }
