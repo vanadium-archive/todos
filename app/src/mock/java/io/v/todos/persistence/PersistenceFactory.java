@@ -51,7 +51,8 @@ public final class PersistenceFactory {
 
     static class MockMainPersistence implements MainPersistence {
         @Override
-        public void addTodoList(ListSpec listSpec) {
+        public String addTodoList(ListSpec listSpec) {
+            return "";
         }
 
         @Override

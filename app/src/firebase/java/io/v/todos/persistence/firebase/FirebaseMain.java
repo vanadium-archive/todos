@@ -66,8 +66,10 @@ public class FirebaseMain extends FirebasePersistence implements MainPersistence
     }
 
     @Override
-    public void addTodoList(ListSpec listSpec) {
-        mTodoLists.push().setValue(listSpec);
+    public String addTodoList(ListSpec listSpec) {
+        Firebase newListItem = mTodoLists.push();
+        newListItem.setValue(listSpec);
+        return newListItem.getKey();
     }
 
     @Override

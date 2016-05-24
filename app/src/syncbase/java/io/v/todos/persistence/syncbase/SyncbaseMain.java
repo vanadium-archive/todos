@@ -45,7 +45,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     private static final String
             TAG = SyncbaseMain.class.getSimpleName();
 
-    private static int DEFAULT_MAX_JOIN_ATTEMPTS = 5;
+    private static int DEFAULT_MAX_JOIN_ATTEMPTS = 10;
 
     private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.COLLECTION_ID, true);
     private final Map<String, MainListTracker> mTaskTrackers = new HashMap<>();
@@ -108,31 +108,24 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     }
 
     @Override
-    public void addTodoList(final ListSpec listSpec) {
+    public String addTodoList(final ListSpec listSpec) {
         final String listName = LISTS_PREFIX + mIdGenerator.generateTailId();
         final Collection listCollection = getDatabase().getCollection(getVContext(), listName);
 
-        // TODO(alexfandrianto): Syncgroup creation is slow if you specify a cloud and are offline.
-        // We'll try to connect to the cloud and then time out our RPC. The error is swallowed, so
-        // we'll just think there's a blank space of time. Maybe we should just write to these
-        // collections anyway. If https://github.com/vanadium/issues/issues/1326 is done, however,
-        // we won't need to change this code.
         Futures.addCallback(listCollection.create(getVContext(), null),
                 new SyncTrappingCallback<Void>() {
                     @Override
                     public void onSuccess(@Nullable Void result) {
-                        Futures.addCallback(createListSyncgroup(listCollection.id()),
-                                new SyncTrappingCallback<Void>() {
-                                    @Override
-                                    public void onSuccess(@Nullable Void result) {
-                                        // These can happen in either order.
-                                        trap(rememberTodoList(listName));
-                                        trap(listCollection.put(getVContext(),
-                                                SyncbaseTodoList.LIST_METADATA_ROW_NAME, listSpec));
-                                    }
-                                });
+                        // These can happen in any order.
+                        trap(listCollection.put(getVContext(),
+                                SyncbaseTodoList.LIST_METADATA_ROW_NAME, listSpec));
+                        trap(rememberTodoList(listName));
+                        // TODO(alexfandrianto): Syncgroup creation is slow if you specify a cloud
+                        // and are offline. https://github.com/vanadium/issues/issues/1326
+                        trap(createListSyncgroup(listCollection.id()));
                     }
                 });
+        return listName;
     }
 
     private ListenableFuture<SyncgroupSpec> joinListSyncgroup(String listId, String ownerBlessing) {

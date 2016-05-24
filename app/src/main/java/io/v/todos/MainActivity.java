@@ -6,6 +6,7 @@ package io.v.todos;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.VisibleForTesting;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
@@ -49,11 +50,7 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
             @Override
             public void onClick(View view) {
                 String fbKey = (String)view.getTag();
-
-                Intent intent = new Intent(MainActivity.this, TodoListActivity.class);
-                intent.putExtra(INTENT_SNACKOO_KEY, fbKey);
-                startActivity(intent);
-                overridePendingTransition(R.anim.right_slide_in, R.anim.left_slide_out);
+                enterList(fbKey);
             }
         });
 
@@ -119,7 +116,7 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
                 // probably better just to rebind.
                 TodoListViewHolder vh = (TodoListViewHolder) mRecyclerView
                         .findViewHolderForAdapterPosition(end);
-                if (vh.itemView.getAlpha() < 1) {
+                if (vh != null && vh.itemView.getAlpha() < 1) {
                     mAdapter.bindViewHolder(vh, end);
                 } else {
                     mAdapter.notifyItemChanged(end);
@@ -140,9 +137,23 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
         UIUtil.showAddDialog(this, "New Todo List", new UIUtil.DialogResponseListener() {
             @Override
             public void handleResponse(String response) {
-                mPersistence.addTodoList(new ListSpec(response));
+                String newKey = mPersistence.addTodoList(new ListSpec(response));
+                enterList(newKey);
             }
         });
+    }
+
+    private void enterList(final String listKey) {
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+
+                Intent intent = new Intent(MainActivity.this, TodoListActivity.class);
+                intent.putExtra(INTENT_SNACKOO_KEY, listKey);
+                startActivity(intent);
+                overridePendingTransition(R.anim.right_slide_in, R.anim.left_slide_out);
+            }
+        }, 100); // Use a short delay to allow the keyboard to disappear.
     }
 
     // The following methods are boilerplate for handling the Menu in the top right corner.

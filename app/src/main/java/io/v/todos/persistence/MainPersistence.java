@@ -8,6 +8,6 @@ import io.v.todos.model.ListMetadata;
 import io.v.todos.model.ListSpec;
 
 public interface MainPersistence extends Persistence {
-    void addTodoList(ListSpec listSpec);
+    String addTodoList(ListSpec listSpec);
     void deleteTodoList(String key);
 }
