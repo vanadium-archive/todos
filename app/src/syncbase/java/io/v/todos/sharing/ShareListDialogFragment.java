@@ -10,7 +10,6 @@ import android.app.FragmentManager;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
-import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.RecyclerView;
 import android.view.KeyEvent;
 import android.view.View;
@@ -100,19 +99,6 @@ public class ShareListDialogFragment extends DialogFragment
         mAdapter.setContactTouchListener(this);
         mContacts = (RecyclerView) view.findViewById(R.id.recycler);
         mContacts.setAdapter(mAdapter);
-        mContacts.setItemAnimator(new DefaultItemAnimator() {
-            @Override
-            public boolean animateAdd(RecyclerView.ViewHolder holder) {
-                dispatchAddFinished(holder);
-                return false;
-            }
-
-            @Override
-            public boolean animateRemove(RecyclerView.ViewHolder holder) {
-                dispatchRemoveFinished(holder);
-                return false;
-            }
-        });
 
         mScanContext = SyncbasePersistence.getAppVContext().withCancel();
         try {
