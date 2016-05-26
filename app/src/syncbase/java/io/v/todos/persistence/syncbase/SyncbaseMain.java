@@ -188,7 +188,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
 
         SyncgroupSpec spec = new SyncgroupSpec(
-                "TODOs User Data Collection", CLOUD_NAME, permissions,
+                "TODO list", CLOUD_NAME, permissions,
                 ImmutableList.of(id),
                 ImmutableList.of(MOUNTPOINT), false);
         String blessingStr = getPersonalBlessingsString();
