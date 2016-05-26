@@ -39,6 +39,7 @@ public final class Sharing {
     private Sharing() {
     }
 
+    private static final String TAG = "SHARING";
     private static final String OWNER_KEY = "owner";
     private static final Object sDiscoveryMutex = new Object();
     private static Discovery sDiscovery;
@@ -110,13 +111,13 @@ public final class Sharing {
                             // https://github.com/vanadium/issues/issues/1328
                             if (result.getAttribute(SyncbasePersistence
                                     .getPersonalBlessingsString()) == null) {
-                                Log.d("SHARING", "...but the ad was not meant for this user.");
+                                Log.d(TAG, "...but the ad was not meant for this user.");
                                 return null; // ignore; this isn't meant for us
                             }
 
                             // Never mind about losses, just handle found advertisements.
                             if (!result.isLost()) {
-                                Log.d("SHARING", "...and will accept it.");
+                                Log.d(TAG, "...and will accept it.");
 
                                 SyncbasePersistence.acceptSharedTodoList(listName, result
                                         .getAttribute(OWNER_KEY));
@@ -161,43 +162,50 @@ public final class Sharing {
         SyncbasePersistence.watchUserCollection(new InputChannelCallback<WatchChange>() {
             @Override
             public ListenableFuture<Void> onNext(WatchChange change) {
-                final String listId = change.getRowName();
-                final String owner = SyncbasePersistence.castFromSyncbase(change.getValue(),
-                        String.class);
-                if (!owner.equals(SyncbasePersistence.getPersonalBlessingsString())) {
-                    return Futures.immediateFuture((Void) null);
-                }
+                try {
+                    final String listId = change.getRowName();
 
-                if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
-                    VContext ctx = sAdContextMap.remove(listId);
-                    ctx.cancel(); // Stop advertising the list; it's been deleted.
-                } else {
-                    // We should probably start to advertise this collection and check its spec.
-                    SyncbasePersistence.watchSharedTo(listId, new Function<List<BlessingPattern>,
-                            Void>() {
-                        @Override
-                        public Void apply(List<BlessingPattern> patterns) {
-                            // Make a copy of the patterns list that excludes the cloud and this
-                            // user's blessings.
-                            List<BlessingPattern> filteredPatterns = new ArrayList<>();
-                            for (BlessingPattern pattern : patterns) {
-                                String pStr = pattern.toString();
-                                if (pStr.equals(SyncbasePersistence.getPersonalBlessingsString()) ||
-                                        pStr.equals(SyncbasePersistence.CLOUD_BLESSING)) {
-                                    continue;
-                                }
-                                filteredPatterns.add(pattern);
-                            }
-
-                            // Advertise to the remaining patterns.
-                            if (filteredPatterns.size() > 0) {
-                                Log.d("SHARING", "Must advertise for " + listId + " to " +
-                                        filteredPatterns.toString());
-                                advertiseList(vContext, listId, filteredPatterns);
-                            }
-                            return null;
+                    if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
+                        VContext ctx = sAdContextMap.remove(listId);
+                        if (ctx != null) { // TODO(alexfandrianto): ctx might be null if ad failed?
+                            ctx.cancel(); // Stop advertising the list; it's been deleted.
                         }
-                    });
+                    } else {
+                        final String owner = SyncbasePersistence.castFromSyncbase(change.getValue(),
+                                String.class);
+                        if (!owner.equals(SyncbasePersistence.getPersonalBlessingsString())) {
+                            return Futures.immediateFuture((Void) null);
+                        }
+
+                        // We should probably start to advertise this collection and check its spec.
+                        SyncbasePersistence.watchSharedTo(listId, new Function<List<BlessingPattern>,
+                                Void>() {
+                            @Override
+                            public Void apply(List<BlessingPattern> patterns) {
+                                // Make a copy of the patterns list that excludes the cloud and this
+                                // user's blessings.
+                                List<BlessingPattern> filteredPatterns = new ArrayList<>();
+                                for (BlessingPattern pattern : patterns) {
+                                    String pStr = pattern.toString();
+                                    if (pStr.equals(SyncbasePersistence.getPersonalBlessingsString()) ||
+                                            pStr.equals(SyncbasePersistence.CLOUD_BLESSING)) {
+                                        continue;
+                                    }
+                                    filteredPatterns.add(pattern);
+                                }
+
+                                // Advertise to the remaining patterns.
+                                if (filteredPatterns.size() > 0) {
+                                    Log.d(TAG, "Must advertise for " + listId + " to " +
+                                            filteredPatterns.toString());
+                                    advertiseList(vContext, listId, filteredPatterns);
+                                }
+                                return null;
+                            }
+                        });
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Error during watch handle", e);
                 }
                 return null;
             }
@@ -216,7 +224,7 @@ public final class Sharing {
     private static void advertiseList(VContext baseContext, String listId, List<BlessingPattern>
             patterns) {
         if (baseContext.isCanceled()) {
-            Log.w("SHARING", "Base context was canceled; cannot advertise");
+            Log.w(TAG, "Base context was canceled; cannot advertise");
             return;
         }
         // Swap out the ad context...

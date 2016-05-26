@@ -65,8 +65,6 @@ import io.v.v23.security.Blessings;
 import io.v.v23.security.access.AccessList;
 import io.v.v23.security.access.Constants;
 import io.v.v23.security.access.Permissions;
-import io.v.v23.services.syncbase.CollectionRow;
-import io.v.v23.services.syncbase.CollectionRowPattern;
 import io.v.v23.services.syncbase.Id;
 import io.v.v23.services.syncbase.SyncgroupJoinFailedException;
 import io.v.v23.services.syncbase.SyncgroupMemberInfo;

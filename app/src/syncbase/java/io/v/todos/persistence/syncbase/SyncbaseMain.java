@@ -30,7 +30,6 @@ import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.MainPersistence;
 import io.v.v23.InputChannelCallback;
 import io.v.v23.security.access.Permissions;
-import io.v.v23.services.syncbase.CollectionRow;
 import io.v.v23.services.syncbase.Id;
 import io.v.v23.services.syncbase.SyncgroupJoinFailedException;
 import io.v.v23.services.syncbase.SyncgroupMemberInfo;
@@ -63,44 +62,48 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         trap(watchUserCollection(new InputChannelCallback<WatchChange>() {
             @Override
             public ListenableFuture<Void> onNext(WatchChange change) {
-                final String listId = change.getRowName();
-                final String ownerBlessing = SyncbasePersistence.castFromSyncbase(change.getValue(),
-                        String.class);
+                try {
+                    final String listId = change.getRowName();
 
-                if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
-                    // (this is idempotent)
-                    Log.d(TAG, listId + " removed from index");
-                    deleteTodoList(listId);
-                } else {
-                    // If we are tracking this list already, don't bother doing anything.
-                    // This might happen if a same-user device did a simultaneous put into the
-                    // userdata collection.
-                    if (mTaskTrackers.get(listId) != null) {
-                        return null;
-                    }
-
-                    mIdGenerator.registerId(change.getRowName().substring(LISTS_PREFIX.length()));
-
-                    Log.d(TAG, "Found a list id from userdata watch: " + listId + " with owner: "
-                            + ownerBlessing);
-                    trap(joinWithBackoff(listId, ownerBlessing));
-
-                    MainListTracker listTracker = new MainListTracker(getVContext(), getDatabase(),
-                            listId, listener);
-                    mTaskTrackers.put(listId, listTracker);
-
-                    // If the watch fails with NoExistException, the collection has been deleted.
-                    Futures.addCallback(listTracker.watchFuture, new SyncTrappingCallback<Void>() {
-                        @Override
-                        public void onFailure(@NonNull Throwable t) {
-                            if (t instanceof NoExistException) {
-                                // (this is idempotent)
-                                trap(getUserCollection().delete(getVContext(), listId));
-                            } else {
-                                super.onFailure(t);
-                            }
+                    if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
+                        // (this is idempotent)
+                        Log.d(TAG, listId + " removed from index");
+                        deleteTodoList(listId);
+                    } else {
+                        final String ownerBlessing = SyncbasePersistence.castFromSyncbase(
+                                change.getValue(), String.class);
+                        // If we are tracking this list already, don't bother doing anything.
+                        // This might happen if a same-user device did a simultaneous put into the
+                        // userdata collection.
+                        if (mTaskTrackers.get(listId) != null) {
+                            return null;
                         }
-                    });
+
+                        mIdGenerator.registerId(change.getRowName().substring(LISTS_PREFIX.length()));
+
+                        Log.d(TAG, "Found a list id from userdata watch: " + listId + " with owner: "
+                                + ownerBlessing);
+                        trap(joinWithBackoff(listId, ownerBlessing));
+
+                        MainListTracker listTracker = new MainListTracker(getVContext(), getDatabase(),
+                                listId, listener);
+                        mTaskTrackers.put(listId, listTracker);
+
+                        // If the watch fails with NoExistException, the collection has been deleted.
+                        Futures.addCallback(listTracker.watchFuture, new SyncTrappingCallback<Void>() {
+                            @Override
+                            public void onFailure(@NonNull Throwable t) {
+                                if (t instanceof NoExistException) {
+                                    // (this is idempotent)
+                                    trap(getUserCollection().delete(getVContext(), listId));
+                                } else {
+                                    super.onFailure(t);
+                                }
+                            }
+                        });
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Error during watch handle", e);
                 }
                 return null;
             }
