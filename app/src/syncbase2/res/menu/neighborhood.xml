@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+      xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item android:id="@+id/advertise_neighborhood"
+          android:orderInCategory="103"
+          android:checkable="true"
+          android:icon="@drawable/ic_advertise_neighborhood_off_white_24dp"
+          android:title="@string/share_location"
+          android:showAsAction="always"/>
+</menu>
