@@ -32,6 +32,8 @@ import org.joda.time.Duration;
 import org.joda.time.format.DateTimeFormat;
 
 import java.io.File;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +61,7 @@ import io.v.v23.InputChannelCallback;
 import io.v.v23.InputChannels;
 import io.v.v23.VFutures;
 import io.v.v23.context.VContext;
+import io.v.v23.naming.Endpoint;
 import io.v.v23.rpc.Server;
 import io.v.v23.security.BlessingPattern;
 import io.v.v23.security.Blessings;
@@ -177,10 +180,35 @@ public class SyncbasePersistence implements Persistence {
             Log.w(TAG, "Unable to start remote inspection service:" + e);
         }
         // TODO(ashankar): This is not a good idea. For one, endpoints of a service may change
-        // as the device changes networks. But I believe in a few weeks (end of May 2016) we'll
+        // as the device changes networks. But I believe in a few weeks (mid June 2016) we'll
         // switch to a mode where there are no "local RPCs" between the syncbase client and the
         // server, so this will hopefully go away before it matters.
-        return server.getStatus().getEndpoints()[0].name();
+        // TODO(suharshs): Although in a few weeks (mid June 2016) the new mode mentioned above
+        // will solve this issue, there is currently still an bug where initialization can hang due
+        // to the wrong endpoint getting returned here. In particular, it is important that the
+        // endpoint returned is locally accessible for the "local RPC" to succeed.
+        // So for now, we make sure to return an locally accessible endpoint.
+        Endpoint[] endpoints = server.getStatus().getEndpoints();
+        for (Endpoint ep : endpoints) {
+            try {
+                String[] hostPort = ep.address().address().split(":");
+                if (hostPort.length != 2) {
+                    continue;
+                }
+                InetAddress addr = InetAddress.getByName(hostPort[0]);
+                if (addr.isLoopbackAddress()) {
+                    return ep.name();
+                }
+            } catch (UnknownHostException e) {
+                // Try the next address.
+            }
+        }
+        String errString = "";
+        for (Endpoint ep : endpoints) {
+            errString += " " + ep.name();
+        }
+        Log.e(TAG, "No locally accessible addresses in" + errString);
+        return endpoints[0].name();
     }
 
     /**
