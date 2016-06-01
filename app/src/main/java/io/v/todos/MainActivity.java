@@ -4,10 +4,14 @@
 
 package io.v.todos;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.VisibleForTesting;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.view.Menu;
@@ -39,6 +43,8 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
     private DataList<ListMetadata> mMainList = new DataList<>();
 
     private RecyclerView mRecyclerView;
+
+    private static final int BLE_LOCATION_PERMISSIONS_REQUEST_CODE = 1;
 
     @Override
     protected void onCreate(final Bundle savedInstanceState) {
@@ -77,6 +83,7 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
 
             @Override
             protected void onSuccess(MainPersistence persistence) {
+                requestLocationPermissions();
                 mPersistence = persistence;
                 setEmptyVisiblity();
             }
@@ -173,5 +180,37 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    // TODO(suharshs): Move this into the BLE Driver code so that all app developers don't have to
+    // request this.
+    public void requestLocationPermissions() {
+        // Request location permissions at run-time to allow BLE scanning.
+        // As per: https://developer.android.com/training/permissions/requesting.html.
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
+                    BLE_LOCATION_PERMISSIONS_REQUEST_CODE);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case BLE_LOCATION_PERMISSIONS_REQUEST_CODE: {
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // Permission was granted;
+                } else {
+                    // Permission was denied;
+                    // TODO(suharshs): We should avoid doing BLE scanning in this case?
+                }
+                return;
+            }
+        }
     }
 }
