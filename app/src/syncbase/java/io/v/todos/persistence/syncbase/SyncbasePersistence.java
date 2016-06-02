@@ -62,6 +62,7 @@ import io.v.v23.InputChannels;
 import io.v.v23.VFutures;
 import io.v.v23.context.VContext;
 import io.v.v23.naming.Endpoint;
+import io.v.v23.rpc.ListenSpec;
 import io.v.v23.rpc.Server;
 import io.v.v23.security.BlessingPattern;
 import io.v.v23.security.Blessings;
@@ -157,7 +158,12 @@ public class SyncbasePersistence implements Persistence {
                                               Permissions serverPermissions)
             throws SyncbaseServer.StartException {
         try {
-            vContext = V.withListenSpec(vContext, V.getListenSpec(vContext).withProxy(PROXY));
+            ListenSpec ls = V.getListenSpec(vContext);
+            ListenSpec.Address[] addresses = ls.getAddresses();
+            addresses = Arrays.copyOf(addresses, addresses.length+1);
+            addresses[addresses.length-1] = new ListenSpec.Address("bt", "/0");
+            ListenSpec newLs = new ListenSpec(addresses, PROXY, ls.getChooser());
+            vContext = V.withListenSpec(vContext, newLs);
         } catch (VException e) {
             Log.w(TAG, "Unable to set up Vanadium proxy for Syncbase");
         }
