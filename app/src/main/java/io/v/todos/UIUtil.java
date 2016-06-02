@@ -7,6 +7,7 @@ package io.v.todos;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.Paint;
+import android.support.design.widget.TextInputLayout;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.RecyclerView;
 import android.text.format.DateUtils;
@@ -52,51 +53,75 @@ public final class UIUtil {
         return lastDialog;
     }
 
-    public static void showAddDialog(Context context, String title,
-                                     final DialogResponseListener addListener) {
-        final EditText todoItem = new EditText(context);
+    public static AlertDialog dialogMaker(Context context, String title, String defaultValue,
+                                             final DialogResponseListener listener) {
+        // Prepare the edit text.
+        TextInputLayout inputLayout = (TextInputLayout)LayoutInflater.from(context).
+                inflate(R.layout.dialog_edittext, null);
+        final EditText editText = inputLayout.getEditText();
+        boolean adding = (defaultValue == null);
+        if (!adding) {
+            editText.setText(defaultValue);
+        }
 
-        AlertDialog dialog = new AlertDialog.Builder(context)
+        // Build the alert dialog.
+        AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(context)
                 .setTitle(title)
-                .setView(todoItem)
-                .setPositiveButton("Add", new DialogInterface.OnClickListener() {
+                .setView(inputLayout)
+                .setPositiveButton(adding ? "Add" : "Save", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
-                        addListener.handleResponse(todoItem.getText().toString());
+                        String response = editText.getText().toString();
+                        if (response != null && response.length() > 0) {
+                            listener.handleResponse(response);
+                        }
                     }
                 })
                 .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
                     }
-                }).show();
+                });
+        if (!adding) {
+            // Only items being edited can be deleted.
+            // TODO(alexfandrianto): Should we keep this option? We can also swipe in order to
+            // delete tasks/lists.
+            dialogBuilder.setNeutralButton("Delete", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int whichButton) {
+                    listener.handleDelete();
+                }
+            });
+        }
+
+        // Show the dialog with the keyboard up. If the "Send" button is pressed, treat that as a
+        // positive button press.
+        final AlertDialog dialog = dialogBuilder.show();
         dialog.getWindow().setSoftInputMode(
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        editText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+                if ((event != null && (event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) ||
+                        (actionId == EditorInfo.IME_ACTION_DONE)) {
+                    dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick();
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        return dialog;
+    }
+
+    public static void showAddDialog(Context context, String title,
+                                     final DialogResponseListener addListener) {
+        AlertDialog dialog = dialogMaker(context, title, null, addListener);
+
         lastDialog = dialog;
     }
 
     public static void showEditDialog(Context context, String title, String defaultValue,
                                       final DialogResponseListener editListener) {
-        final EditText todoItem = new EditText(context);
-        todoItem.setText(defaultValue);
 
-        AlertDialog dialog = new AlertDialog.Builder(context)
-                .setTitle(title)
-                .setView(todoItem)
-                .setPositiveButton("Save", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        editListener.handleResponse(todoItem.getText().toString());
-                    }
-                })
-                .setNeutralButton("Delete", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        editListener.handleDelete();
-                    }
-                })
-                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                    }
-                }).show();
-        dialog.getWindow().setSoftInputMode(
-                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        AlertDialog dialog = dialogMaker(context, title, defaultValue, editListener);
+
         lastDialog = dialog;
     }
 
