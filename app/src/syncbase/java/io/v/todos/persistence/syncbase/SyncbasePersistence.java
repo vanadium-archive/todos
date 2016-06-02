@@ -109,7 +109,8 @@ public class SyncbasePersistence implements Persistence {
     public static final String
             USER_COLLECTION_NAME = "userdata",
             MOUNTPOINT = "/ns.dev.v.io:8101/tmp/todos/users/",
-            CLOUD_NAME = MOUNTPOINT + "cloud",
+            CLOUD_NAME = null, // MOUNTPOINT + "cloud",
+    // TODO(alexfandrianto): Restore the cloud once we can rely on it again.
     // TODO(alexfandrianto): This shouldn't be me running the cloud.
     CLOUD_BLESSING = "dev.v.io:u:alexfandrianto@google.com";
 
@@ -531,16 +532,17 @@ public class SyncbasePersistence implements Persistence {
         VFutures.sync(Futures.dereference(blessings));
         appVInit(activity.getApplicationContext());
         final SyncbasePersistence self = this;
-        final Future<?> ensureCloudDatabaseExists = sExecutor.submit(new Runnable() {
+        /*final Future<?> ensureCloudDatabaseExists = sExecutor.submit(new Runnable() {
             @Override
             public void run() {
                 ensureCloudDatabaseExists();
             }
-        });
+        });*/
         ensureSyncbaseStarted(activity);
         ensureDatabaseExists();
         ensureUserCollectionExists();
-        VFutures.sync(ensureCloudDatabaseExists); // must finish before syncgroup setup
+        // TODO(alexfandrianto): If the cloud is dependent on me, then we must do this too.
+        // VFutures.sync(ensureCloudDatabaseExists); // must finish before syncgroup setup
         ensureUserSyncgroupExists();
         Sharing.initDiscovery(); // requires that db and collection exist
         sInitialized = true;
