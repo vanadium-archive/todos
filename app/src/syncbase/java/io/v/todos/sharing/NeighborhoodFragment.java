@@ -110,7 +110,7 @@ public class NeighborhoodFragment extends Fragment
     }
 
     private static boolean isAdvertising() {
-        return sPrefs.getBoolean(PREF_ADVERTISE_NEIGHBORHOOD, false);
+        return sPrefs.getBoolean(PREF_ADVERTISE_NEIGHBORHOOD, true);
     }
 
     private MenuItem mAdvertiseNeighborhoodMenuItem;
