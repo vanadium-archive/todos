@@ -31,7 +31,9 @@ import io.v.v23.discovery.Advertisement;
 import io.v.v23.discovery.Discovery;
 import io.v.v23.discovery.Update;
 import io.v.v23.security.BlessingPattern;
+import io.v.v23.services.syncbase.Id;
 import io.v.v23.syncbase.ChangeType;
+import io.v.v23.syncbase.Syncbase;
 import io.v.v23.syncbase.WatchChange;
 import io.v.v23.verror.VException;
 
@@ -78,12 +80,13 @@ public final class Sharing {
         return SyncbasePersistence.getAppContext().getPackageName();
     }
 
+    // TODO(alexfandrianto): Make this "presence" and "invitation" once everyone migrates over.
     public static String getPresenceInterface() {
-        return getRootInterface() + ".presence";
+        return getRootInterface() + ".presence2";
     }
 
     public static String getInvitationInterface() {
-        return getRootInterface() + ".invitation";
+        return getRootInterface() + ".invitation2";
     }
 
     /**
@@ -104,8 +107,9 @@ public final class Sharing {
                             if (listName == null) {
                                 return null;
                             }
+                            String owner = result.getAttribute(OWNER_KEY);
                             Log.d("SHARING", "Noticed advertised list: " + listName + " by: " +
-                                    result.getAttribute(OWNER_KEY));
+                                    owner);
 
                             // TODO(alexfandrianto): Remove hack.
                             // https://github.com/vanadium/issues/issues/1328
@@ -119,8 +123,7 @@ public final class Sharing {
                             if (!result.isLost()) {
                                 Log.d(TAG, "...and will accept it.");
 
-                                SyncbasePersistence.acceptSharedTodoList(listName, result
-                                        .getAttribute(OWNER_KEY));
+                                SyncbasePersistence.acceptSharedTodoList(new Id(owner, listName));
                             }
                             return null;
                         }
@@ -163,16 +166,16 @@ public final class Sharing {
             @Override
             public ListenableFuture<Void> onNext(WatchChange change) {
                 try {
-                    final String listId = change.getRowName();
+                    final String listIdStr = change.getRowName();
+                    final Id listId = SyncbasePersistence.convertStringToId(listIdStr);
 
                     if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
-                        VContext ctx = sAdContextMap.remove(listId);
+                        VContext ctx = sAdContextMap.remove(listIdStr);
                         if (ctx != null) { // TODO(alexfandrianto): ctx might be null if ad failed?
                             ctx.cancel(); // Stop advertising the list; it's been deleted.
                         }
                     } else {
-                        final String owner = SyncbasePersistence.castFromSyncbase(change.getValue(),
-                                String.class);
+                        final String owner = listId.getBlessing();
                         if (!owner.equals(SyncbasePersistence.getPersonalBlessingsString())) {
                             return Futures.immediateFuture((Void) null);
                         }
@@ -196,7 +199,7 @@ public final class Sharing {
 
                                 // Advertise to the remaining patterns.
                                 if (filteredPatterns.size() > 0) {
-                                    Log.d(TAG, "Must advertise for " + listId + " to " +
+                                    Log.d(TAG, "Must advertise for " + listIdStr + " to " +
                                             filteredPatterns.toString());
                                     advertiseList(vContext, listId, filteredPatterns);
                                 }
@@ -221,26 +224,27 @@ public final class Sharing {
      * @param listId      The list to be advertised
      * @param patterns    Blessings that the advertisement should target
      */
-    private static void advertiseList(VContext baseContext, String listId, List<BlessingPattern>
+    private static void advertiseList(VContext baseContext, Id listId, List<BlessingPattern>
             patterns) {
         if (baseContext.isCanceled()) {
             Log.w(TAG, "Base context was canceled; cannot advertise");
             return;
         }
         // Swap out the ad context...
-        VContext oldAdContext = sAdContextMap.remove(listId);
+        String key = SyncbasePersistence.convertIdToString(listId);
+        VContext oldAdContext = sAdContextMap.remove(key);
         if (oldAdContext != null) {
             oldAdContext.cancel();
         }
         VContext newAdContext = baseContext.withCancel();
-        sAdContextMap.put(listId, newAdContext);
+        sAdContextMap.put(key, newAdContext);
 
 
         try {
             Advertisement ad = new Advertisement();
             ad.setInterfaceName(Sharing.getInvitationInterface());
-            ad.getAddresses().add(listId);
-            ad.getAttributes().put(OWNER_KEY, SyncbasePersistence.getPersonalBlessingsString());
+            ad.getAddresses().add(listId.getName());
+            ad.getAttributes().put(OWNER_KEY, listId.getBlessing());
 
             // TODO(alexfandrianto): Remove hack. https://github.com/vanadium/issues/issues/1328
             for (BlessingPattern pattern : patterns) {

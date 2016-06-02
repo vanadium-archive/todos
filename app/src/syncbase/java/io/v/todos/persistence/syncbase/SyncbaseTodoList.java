@@ -9,6 +9,7 @@ import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.util.Log;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
@@ -89,13 +90,22 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     /**
      * This assumes that the collection for this list already exists.
      */
-    public SyncbaseTodoList(Activity activity, Bundle savedInstanceState, String listId,
+    public SyncbaseTodoList(Activity activity, Bundle savedInstanceState, String listIdStr,
                             TodoListListener listener)
             throws VException, SyncbaseServer.StartException {
         super(activity, savedInstanceState);
         mListener = listener;
 
-        mList = getDatabase().getCollection(getVContext(), listId);
+        Log.w(TAG, "syncbase todo list: " + listIdStr);
+        Id listId = convertStringToId(listIdStr);
+        Log.w(TAG, "after: " + listId.toString());
+
+        // Only show the share menu if you are the owner of this list.
+        if (!listId.getBlessing().equals(getPersonalBlessingsString())) {
+            mShareListMenuFragment.hideShareMenuItem();
+        }
+
+        mList = getDatabase().getCollection(listId);
         InputChannel<WatchChange> listWatch = getDatabase().watch(getVContext(),
                 ImmutableList.of(Util.rowPrefixPattern(mList.id(), "")));
         ListenableFuture<Void> listWatchFuture = InputChannels.withCallback(listWatch,
@@ -118,7 +128,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
             }
         });
 
-        mMemberTimer = watchSharedTo(listId, new Function<List<BlessingPattern>, Void>() {
+        mMemberTimer = watchSharedTo(mList.id(), new Function<List<BlessingPattern>, Void>() {
             @Override
             public Void apply(List<BlessingPattern> patterns) {
                 // Analyze these patterns to construct the emails, and fire the listener!
@@ -202,7 +212,7 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     }
 
     private Syncgroup getListSyncgroup() {
-        return getDatabase().getSyncgroup(new Id(getPersonalBlessingsString(),
+        return getDatabase().getSyncgroup(new Id(mList.id().getBlessing(),
                 computeListSyncgroupName(mList.id().getName())));
     }
 

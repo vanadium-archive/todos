@@ -380,8 +380,8 @@ public class SyncbasePersistence implements Persistence {
 
                 try {
                     Log.d(TAG, "Trying to join the syncgroup: " + sgName);
-                    VFutures.sync(sgHandle.join(getAppVContext(), CLOUD_NAME, Arrays.asList(CLOUD_BLESSING),
-                            memberInfo));
+                    VFutures.sync(sgHandle.join(getAppVContext(), CLOUD_NAME,
+                            Arrays.asList(CLOUD_BLESSING), memberInfo));
                     Log.d(TAG, "JOINED the syncgroup: " + sgName);
                 } catch (SyncgroupJoinFailedException e) {
                     Log.w(TAG, "Failed join. Trying to create the syncgroup: " + sgName, e);
@@ -415,6 +415,16 @@ public class SyncbasePersistence implements Persistence {
 
     protected static String computeListSyncgroupName(String listId) {
         return LIST_COLLECTION_SYNCGROUP_SUFFIX + listId;
+    }
+
+    private static String BLESSING_NAME_SEPARATOR = "___";
+    public static String convertIdToString(Id id) {
+        // Put the name first since it has a useful prefix for watch to switch on.
+        return id.getName() + BLESSING_NAME_SEPARATOR + id.getBlessing();
+    }
+    public static Id convertStringToId(String idString) {
+        String[] parts = idString.split(BLESSING_NAME_SEPARATOR);
+        return new Id(parts[1], parts[0]);
     }
 
     private static volatile boolean sInitialized;
@@ -564,26 +574,22 @@ public class SyncbasePersistence implements Persistence {
         }
     }
 
-    public static void acceptSharedTodoList(final String listId, final String owner) {
+    public static void acceptSharedTodoList(final Id listId) {
         sExecutor.submit(new Callable<Void>() {
             @Override
             public Void call() throws VException {
-                Boolean exists = VFutures.sync(sUserCollection.getRow(listId).exists
-                        (getAppVContext()));
+                Boolean exists = VFutures.sync(sUserCollection.getRow(convertIdToString(listId)).
+                        exists(getAppVContext()));
                 if (!exists) {
-                    VFutures.sync(rememberTodoList(listId, owner));
+                    VFutures.sync(rememberTodoList(listId));
                 }
                 return null;
             }
         });
     }
 
-    protected static ListenableFuture<Void> rememberTodoList(String listId) {
-        return rememberTodoList(listId, getPersonalBlessingsString());
-    }
-
-    protected static ListenableFuture<Void> rememberTodoList(String listId, String owner) {
-        return sUserCollection.put(getAppVContext(), listId, owner);
+    protected static ListenableFuture<Void> rememberTodoList(Id listId) {
+        return sUserCollection.put(getAppVContext(), convertIdToString(listId), "");
     }
 
     public static ListenableFuture<Void> watchUserCollection(InputChannelCallback<WatchChange>
@@ -593,11 +599,10 @@ public class SyncbasePersistence implements Persistence {
         return InputChannels.withCallback(watch, callback);
     }
 
-    public static Timer watchSharedTo(final String listId, final Function<List<BlessingPattern>,
-            Void>
-            callback) {
-        final Syncgroup sgHandle = sDatabase.getSyncgroup(new Id(getPersonalBlessingsString(),
-                computeListSyncgroupName(listId)));
+    public static Timer watchSharedTo(final Id listId, final Function<List<BlessingPattern>,
+            Void> callback) {
+        final Syncgroup sgHandle = sDatabase.getSyncgroup(new Id(listId.getBlessing(),
+                computeListSyncgroupName(listId.getName())));
 
         Timer timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {

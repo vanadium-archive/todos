@@ -63,31 +63,30 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
             @Override
             public ListenableFuture<Void> onNext(WatchChange change) {
                 try {
-                    final String listId = change.getRowName();
+                    final String listIdStr = change.getRowName();
+                    final Id listId = convertStringToId(listIdStr);
 
                     if (change.getChangeType() == ChangeType.DELETE_CHANGE) {
                         // (this is idempotent)
-                        Log.d(TAG, listId + " removed from index");
-                        deleteTodoList(listId);
+                        Log.d(TAG, listIdStr + " removed from index");
+                        deleteTodoList(listIdStr);
                     } else {
-                        final String ownerBlessing = SyncbasePersistence.castFromSyncbase(
-                                change.getValue(), String.class);
                         // If we are tracking this list already, don't bother doing anything.
                         // This might happen if a same-user device did a simultaneous put into the
                         // userdata collection.
-                        if (mTaskTrackers.get(listId) != null) {
+                        if (mTaskTrackers.get(listIdStr) != null) {
                             return null;
                         }
 
-                        mIdGenerator.registerId(change.getRowName().substring(LISTS_PREFIX.length()));
+                        mIdGenerator.registerId(listId.getName().substring(LISTS_PREFIX.length()));
 
-                        Log.d(TAG, "Found a list id from userdata watch: " + listId + " with owner: "
-                                + ownerBlessing);
-                        trap(joinWithBackoff(listId, ownerBlessing));
+                        Log.d(TAG, "Found a list id from userdata watch: " + listId.getName() +
+                                " with owner: " + listId.getBlessing());
+                        trap(joinWithBackoff(listId));
 
-                        MainListTracker listTracker = new MainListTracker(getVContext(), getDatabase(),
-                                listId, listener);
-                        mTaskTrackers.put(listId, listTracker);
+                        MainListTracker listTracker = new MainListTracker(getVContext(),
+                                getDatabase(), listId, listener);
+                        mTaskTrackers.put(listIdStr, listTracker);
 
                         // If the watch fails with NoExistException, the collection has been deleted.
                         Futures.addCallback(listTracker.watchFuture, new SyncTrappingCallback<Void>() {
@@ -95,7 +94,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                             public void onFailure(@NonNull Throwable t) {
                                 if (t instanceof NoExistException) {
                                     // (this is idempotent)
-                                    trap(getUserCollection().delete(getVContext(), listId));
+                                    trap(getUserCollection().delete(getVContext(), listIdStr));
                                 } else {
                                     super.onFailure(t);
                                 }
@@ -113,7 +112,8 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     @Override
     public String addTodoList(final ListSpec listSpec) {
         final String listName = LISTS_PREFIX + mIdGenerator.generateTailId();
-        final Collection listCollection = getDatabase().getCollection(getVContext(), listName);
+        final Id listId = new Id(getPersonalBlessingsString(), listName);
+        final Collection listCollection = getDatabase().getCollection(listId);
 
         Futures.addCallback(listCollection.create(getVContext(), null),
                 new SyncTrappingCallback<Void>() {
@@ -122,36 +122,36 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                         // These can happen in any order.
                         trap(listCollection.put(getVContext(),
                                 SyncbaseTodoList.LIST_METADATA_ROW_NAME, listSpec));
-                        trap(rememberTodoList(listName));
+                        trap(rememberTodoList(listId));
                         // TODO(alexfandrianto): Syncgroup creation is slow if you specify a cloud
                         // and are offline. https://github.com/vanadium/issues/issues/1326
                         trap(createListSyncgroup(listCollection.id()));
                     }
                 });
-        return listName;
+        return convertIdToString(listId);
     }
 
-    private ListenableFuture<SyncgroupSpec> joinListSyncgroup(String listId, String ownerBlessing) {
+    private ListenableFuture<SyncgroupSpec> joinListSyncgroup(Id listId) {
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
-        String sgName = computeListSyncgroupName(listId);
-        return getDatabase().getSyncgroup(new Id(ownerBlessing, sgName)).join(getVContext(),
+        String sgName = computeListSyncgroupName(listId.getName());
+        return getDatabase().getSyncgroup(new Id(listId.getBlessing(), sgName)).join(getVContext(),
                 CLOUD_NAME, Arrays.asList(CLOUD_BLESSING), memberInfo);
     }
 
-    private ListenableFuture<SyncgroupSpec> joinWithBackoff(String listId, String ownerBlessing) {
-        return joinWithBackoff(listId, ownerBlessing, 0, DEFAULT_MAX_JOIN_ATTEMPTS);
+    private ListenableFuture<SyncgroupSpec> joinWithBackoff(Id listId) {
+        return joinWithBackoff(listId, 0, DEFAULT_MAX_JOIN_ATTEMPTS);
     }
 
-    private ListenableFuture<SyncgroupSpec> joinWithBackoff(final String listId, final String
-            ownerBlessing, final int numTimes, final int limit) {
+    private ListenableFuture<SyncgroupSpec> joinWithBackoff(final Id listId, final int numTimes,
+                                                            final int limit) {
         final String debugString = (numTimes + 1) + "/" + limit + " for: " + listId;
         Log.d(TAG, "Join attempt " + debugString);
         if (numTimes + 1 == limit) { // final attempt!
-            return joinListSyncgroup(listId, ownerBlessing);
+            return joinListSyncgroup(listId);
         }
         final long delay = RETRY_DELAY * (1 << numTimes);
         return Futures.catchingAsync(
-                joinListSyncgroup(listId, ownerBlessing),
+                joinListSyncgroup(listId),
                 SyncgroupJoinFailedException.class,
                 new AsyncFunction<SyncgroupJoinFailedException, SyncgroupSpec>() {
                     public ListenableFuture<SyncgroupSpec> apply(@Nullable
@@ -168,8 +168,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                                 // If this errors, then we will not get another chance to
                                 // see this syncgroup until the app is restarted.
                                 try {
-                                    return joinWithBackoff(listId, ownerBlessing,
-                                            numTimes + 1, limit).get();
+                                    return joinWithBackoff(listId, numTimes + 1, limit).get();
                                 } catch (InterruptedException | ExecutionException e) {
                                     return null;
                                 }
@@ -180,8 +179,8 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     }
 
     private ListenableFuture<Void> createListSyncgroup(Id id) {
-        String listId = id.getName();
-        final String sgName = computeListSyncgroupName(listId);
+        String listName = id.getName();
+        final String sgName = computeListSyncgroupName(listName);
         Permissions permissions =
                 computePermissionsFromBlessings(getPersonalBlessings());
 

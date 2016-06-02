@@ -110,7 +110,7 @@ public class TodoListActivity extends TodosAppActivity<TodoListPersistence, Task
 
             @Override
             public void onDelete() {
-                finish();
+                finishWithAnimation();
             }
 
             @Override

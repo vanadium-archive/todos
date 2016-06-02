@@ -25,6 +25,7 @@ import io.v.v23.InputChannel;
 import io.v.v23.InputChannelCallback;
 import io.v.v23.InputChannels;
 import io.v.v23.context.VContext;
+import io.v.v23.services.syncbase.Id;
 import io.v.v23.syncbase.ChangeType;
 import io.v.v23.syncbase.Collection;
 import io.v.v23.syncbase.Database;
@@ -48,9 +49,9 @@ public class MainListTracker {
     public final Collection collection;
     public final ListenableFuture<Void> watchFuture;
 
-    public MainListTracker(VContext vContext, Database database, final String listId,
+    public MainListTracker(VContext vContext, Database database, final Id listId,
                            ListEventListener<ListMetadata> listener) {
-        collection = database.getCollection(vContext, listId);
+        collection = database.getCollection(listId);
         mListener = listener;
         InputChannel<WatchChange> watch = database.watch(vContext,
                 ImmutableList.of(Util.rowPrefixPattern(collection.id(), "")));
@@ -71,15 +72,19 @@ public class MainListTracker {
             @Override
             public void onFailure(@NonNull Throwable t) {
                 if (t instanceof NoExistException && mListExistsLocally) {
-                    Log.d(TAG, listId + " destroyed");
-                    mListener.onItemDelete(listId);
+                    Log.d(TAG, getNameFromId() + " destroyed");
+                    mListener.onItemDelete(getNameFromId());
                 }
             }
         });
     }
 
+    private String getNameFromId() {
+        return SyncbasePersistence.convertIdToString(collection.id());
+    }
+
     public ListMetadata getListMetadata() {
-        return new ListMetadata(collection.id().getName(), mListSpec, mNumCompletedTasks,
+        return new ListMetadata(getNameFromId(), mListSpec, mNumCompletedTasks,
                 mIsTaskCompleted.size());
     }
 

@@ -32,6 +32,8 @@ public class ShareListMenuFragment extends Fragment {
     public SyncbaseTodoList persistence;
 
     private List<String> mSharedTo = new ArrayList<>();
+    private Menu mMenu;
+    private boolean mShouldHide;
 
     public void setSharedTo(List<String> sharedTo) {
         mSharedTo = sharedTo;
@@ -60,9 +62,21 @@ public class ShareListMenuFragment extends Fragment {
         setHasOptionsMenu(true);
     }
 
+    public void hideShareMenuItem() {
+        mShouldHide = true;
+        if (mMenu != null) {
+            mMenu.findItem(R.id.action_share).setVisible(false);
+        }
+    }
+
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        mMenu = menu;
         inflater.inflate(R.menu.menu_share, menu);
+        if (mShouldHide) {
+            // In case the menu was added after the hide flag was set, hide the menu item now.
+            hideShareMenuItem();
+        }
     }
 
     @Override
