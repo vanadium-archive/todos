@@ -46,6 +46,8 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
 
     private static final int BLE_LOCATION_PERMISSIONS_REQUEST_CODE = 1;
 
+    private PersistenceInitializer<MainPersistence> mPersistenceInitializer;
+
     @Override
     protected void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -74,7 +76,7 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
             }
         }).attachToRecyclerView(mRecyclerView);
 
-        new PersistenceInitializer<MainPersistence>(this) {
+        mPersistenceInitializer = new PersistenceInitializer<MainPersistence>(this) {
             @Override
             protected MainPersistence initPersistence() throws Exception {
                 return PersistenceFactory.getMainPersistence(mActivity, savedInstanceState,
@@ -83,11 +85,14 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
 
             @Override
             protected void onSuccess(MainPersistence persistence) {
-                requestLocationPermissions();
                 mPersistence = persistence;
                 setEmptyVisiblity();
             }
-        }.execute(PersistenceFactory.mightGetMainPersistenceBlock());
+        };
+
+        // mPersistenceInitializer.execute is invoked once we request location permissions from the
+        // app user.
+        requestLocationPermissions();
     }
 
     // Creates a listener for this activity. Visible to tests to allow them to invoke the listener
@@ -194,6 +199,8 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
                     BLE_LOCATION_PERMISSIONS_REQUEST_CODE);
+        } else {
+            mPersistenceInitializer.execute(PersistenceFactory.mightGetMainPersistenceBlock());
         }
     }
 
@@ -202,13 +209,7 @@ public class MainActivity extends TodosAppActivity<MainPersistence, TodoListRecy
                                            String permissions[], int[] grantResults) {
         switch (requestCode) {
             case BLE_LOCATION_PERMISSIONS_REQUEST_CODE: {
-                if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    // Permission was granted;
-                } else {
-                    // Permission was denied;
-                    // TODO(suharshs): We should avoid doing BLE scanning in this case?
-                }
+                mPersistenceInitializer.execute(PersistenceFactory.mightGetMainPersistenceBlock());
                 return;
             }
         }
