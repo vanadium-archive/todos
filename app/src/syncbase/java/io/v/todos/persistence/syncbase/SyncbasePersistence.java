@@ -181,7 +181,10 @@ public class SyncbasePersistence implements Persistence {
 
         Server server = V.getServer(serverContext);
         try {
-            sRemoteInspectors = new RemoteInspectors(serverContext);
+            // TODO(ashankar): For initial debugging it is proving useful to allow remote
+            // inspection to browse through syncbase data. But this should be removed at
+            // some point?
+            sRemoteInspectors = new RemoteInspectors(serverContext, Constants.READ);
         } catch (VException e) {
             Log.w(TAG, "Unable to start remote inspection service:" + e);
         }
