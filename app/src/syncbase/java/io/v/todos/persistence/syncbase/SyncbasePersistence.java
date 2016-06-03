@@ -104,7 +104,7 @@ public class SyncbasePersistence implements Persistence {
     protected static final long
             SHORT_TIMEOUT = 2500,
             MEMBER_TIMER_DELAY = 100,
-            MEMBER_TIMER_PERIOD = 5000;
+            MEMBER_TIMER_PERIOD = 1000;
     public static final String
             USER_COLLECTION_NAME = "userdata",
             MOUNTPOINT = "/ns.dev.v.io:8101/tmp/todos/users/",

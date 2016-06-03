@@ -46,8 +46,8 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     private static final String
             TAG = SyncbaseMain.class.getSimpleName();
 
-    private static final int DEFAULT_MAX_JOIN_ATTEMPTS = 15;
-    private static final long RETRY_DELAY = 2000;
+    private static final int DEFAULT_MAX_JOIN_ATTEMPTS = 30;
+    private static final long MIN_RETRY_DELAY = 1000;
 
     private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.COLLECTION_ID, true);
     private final Map<String, MainListTracker> mTaskTrackers = new HashMap<>();
@@ -157,7 +157,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
             return joinListSyncgroup(listId);
         }
         // Note: This can be easily converted to exponential backoff.
-        final long delay = RETRY_DELAY;
+        final long startTime = System.currentTimeMillis();
         return Futures.catchingAsync(
                 joinListSyncgroup(listId),
                 SyncgroupJoinFailedException.class,
@@ -165,6 +165,9 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                     public ListenableFuture<SyncgroupSpec> apply(@Nullable
                                                                  SyncgroupJoinFailedException
                                                                          input) {
+                        long failTime = System.currentTimeMillis();
+                        long delay = Math.max(0, MIN_RETRY_DELAY + startTime - failTime);
+
                         Log.d(TAG, "Join failed. Sleeping " + debugString + " with delay " + delay);
                         return sExecutor.schedule(new Callable<SyncgroupSpec>() {
 
