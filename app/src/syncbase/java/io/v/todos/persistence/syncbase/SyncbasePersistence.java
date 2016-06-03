@@ -41,7 +41,6 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import io.v.android.inspectors.RemoteInspectors;
 import io.v.android.ManagedVAndroidContext;
@@ -103,7 +102,6 @@ public class SyncbasePersistence implements Persistence {
     protected static final String LISTS_PREFIX = "lists_";
     protected static final long
             SHORT_TIMEOUT = 2500,
-            RETRY_DELAY = 300,
             MEMBER_TIMER_DELAY = 100,
             MEMBER_TIMER_PERIOD = 5000;
     public static final String

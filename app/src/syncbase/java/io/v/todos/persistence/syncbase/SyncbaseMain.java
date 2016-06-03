@@ -44,7 +44,8 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     private static final String
             TAG = SyncbaseMain.class.getSimpleName();
 
-    private static int DEFAULT_MAX_JOIN_ATTEMPTS = 10;
+    private static final int DEFAULT_MAX_JOIN_ATTEMPTS = 15;
+    private static final long RETRY_DELAY = 2000;
 
     private final IdGenerator mIdGenerator = new IdGenerator(IdAlphabets.COLLECTION_ID, true);
     private final Map<String, MainListTracker> mTaskTrackers = new HashMap<>();
@@ -82,7 +83,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
 
                         Log.d(TAG, "Found a list id from userdata watch: " + listId.getName() +
                                 " with owner: " + listId.getBlessing());
-                        trap(joinWithBackoff(listId));
+                        trap(joinWithRetry(listId));
 
                         MainListTracker listTracker = new MainListTracker(getVContext(),
                                 getDatabase(), listId, listener);
@@ -138,18 +139,20 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                 CLOUD_NAME, Arrays.asList(CLOUD_BLESSING), memberInfo);
     }
 
-    private ListenableFuture<SyncgroupSpec> joinWithBackoff(Id listId) {
-        return joinWithBackoff(listId, 0, DEFAULT_MAX_JOIN_ATTEMPTS);
+    // Join the syncgroup. Retry if there are failures.
+    private ListenableFuture<SyncgroupSpec> joinWithRetry(Id listId) {
+        return joinWithRetry(listId, 0, DEFAULT_MAX_JOIN_ATTEMPTS);
     }
 
-    private ListenableFuture<SyncgroupSpec> joinWithBackoff(final Id listId, final int numTimes,
-                                                            final int limit) {
+    private ListenableFuture<SyncgroupSpec> joinWithRetry(final Id listId, final int numTimes,
+                                                          final int limit) {
         final String debugString = (numTimes + 1) + "/" + limit + " for: " + listId;
         Log.d(TAG, "Join attempt " + debugString);
         if (numTimes + 1 == limit) { // final attempt!
             return joinListSyncgroup(listId);
         }
-        final long delay = RETRY_DELAY * (1 << numTimes);
+        // Note: This can be easily converted to exponential backoff.
+        final long delay = RETRY_DELAY;
         return Futures.catchingAsync(
                 joinListSyncgroup(listId),
                 SyncgroupJoinFailedException.class,
@@ -168,7 +171,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
                                 // If this errors, then we will not get another chance to
                                 // see this syncgroup until the app is restarted.
                                 try {
-                                    return joinWithBackoff(listId, numTimes + 1, limit).get();
+                                    return joinWithRetry(listId, numTimes + 1, limit).get();
                                 } catch (InterruptedException | ExecutionException e) {
                                     return null;
                                 }
