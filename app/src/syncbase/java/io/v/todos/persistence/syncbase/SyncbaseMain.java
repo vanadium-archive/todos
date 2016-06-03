@@ -29,6 +29,7 @@ import io.v.todos.model.ListSpec;
 import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.MainPersistence;
 import io.v.v23.InputChannelCallback;
+import io.v.v23.security.access.Constants;
 import io.v.v23.security.access.Permissions;
 import io.v.v23.services.syncbase.Id;
 import io.v.v23.services.syncbase.SyncgroupJoinFailedException;
@@ -37,6 +38,7 @@ import io.v.v23.services.syncbase.SyncgroupSpec;
 import io.v.v23.syncbase.ChangeType;
 import io.v.v23.syncbase.Collection;
 import io.v.v23.syncbase.WatchChange;
+import io.v.v23.syncbase.util.Util;
 import io.v.v23.verror.NoExistException;
 import io.v.v23.verror.VException;
 
@@ -115,8 +117,11 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         final String listName = LISTS_PREFIX + mIdGenerator.generateTailId();
         final Id listId = new Id(getPersonalBlessingsString(), listName);
         final Collection listCollection = getDatabase().getCollection(listId);
+        Permissions permissions = Util.filterPermissionsByTags(
+                computePermissionsFromBlessings(getPersonalBlessings()),
+                ImmutableList.of(Constants.READ, Constants.WRITE, Constants.ADMIN));
 
-        Futures.addCallback(listCollection.create(getVContext(), null),
+        Futures.addCallback(listCollection.create(getVContext(), permissions),
                 new SyncTrappingCallback<Void>() {
                     @Override
                     public void onSuccess(@Nullable Void result) {
@@ -184,8 +189,9 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     private ListenableFuture<Void> createListSyncgroup(Id id) {
         String listName = id.getName();
         final String sgName = computeListSyncgroupName(listName);
-        Permissions permissions =
-                computePermissionsFromBlessings(getPersonalBlessings());
+        Permissions permissions = Util.filterPermissionsByTags(
+                computePermissionsFromBlessings(getPersonalBlessings()),
+                ImmutableList.of(Constants.READ, Constants.ADMIN));
 
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
 

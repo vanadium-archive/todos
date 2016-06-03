@@ -97,8 +97,9 @@ public class SyncbasePersistence implements Persistence {
             BLESSINGS_KEY = "blessings",
             USER_COLLECTION_SYNCGROUP_SUFFIX = "sg_",
             LIST_COLLECTION_SYNCGROUP_SUFFIX = "list_",
-            DEFAULT_BLESSING_STRING = "dev.v.io:o:608941808256-43vtfndets79kf5hac8ieujto8837660" +
-                    ".apps.googleusercontent.com:";
+            DEFAULT_APP_BLESSING_STRING = "dev.v" +
+                    ".io:o:608941808256-43vtfndets79kf5hac8ieujto8837660" +
+                    ".apps.googleusercontent.com";
     protected static final String LISTS_PREFIX = "lists_";
     protected static final long
             SHORT_TIMEOUT = 2500,
@@ -159,8 +160,8 @@ public class SyncbasePersistence implements Persistence {
         try {
             ListenSpec ls = V.getListenSpec(vContext);
             ListenSpec.Address[] addresses = ls.getAddresses();
-            addresses = Arrays.copyOf(addresses, addresses.length+1);
-            addresses[addresses.length-1] = new ListenSpec.Address("bt", "/0");
+            addresses = Arrays.copyOf(addresses, addresses.length + 1);
+            addresses[addresses.length - 1] = new ListenSpec.Address("bt", "/0");
             ListenSpec newLs = new ListenSpec(addresses, PROXY, ls.getChooser());
             vContext = V.withListenSpec(vContext, newLs);
         } catch (VException e) {
@@ -275,7 +276,7 @@ public class SyncbasePersistence implements Persistence {
     }
 
     public static String getEmailFromBlessingsString(String blessingsStr) {
-        String[] split = blessingsStr.split(":");
+        String[] split = blessingsStr.split(io.v.v23.security.Constants.CHAIN_SEPARATOR);
         return split[split.length - 1];
     }
 
@@ -286,7 +287,7 @@ public class SyncbasePersistence implements Persistence {
     public static String blessingsStringFromEmail(String email) {
         // TODO(alexfandrianto): We may need a more sophisticated method for producing this
         // blessings string. Currently, the app's id is fixed to the anonymous Android app.
-        return DEFAULT_BLESSING_STRING + email;
+        return DEFAULT_APP_BLESSING_STRING + io.v.v23.security.Constants.CHAIN_SEPARATOR + email;
     }
 
     protected static Permissions computePermissionsFromBlessings(Blessings blessings) {
@@ -307,10 +308,12 @@ public class SyncbasePersistence implements Persistence {
     private static void ensureDatabaseExists() throws VException {
         synchronized (sDatabaseMutex) {
             if (sDatabase == null) {
-                final Database db = sSyncbase.getDatabase(getAppVContext(), DATABASE, null);
+                final Database db = sSyncbase.getDatabase(new Id(DEFAULT_APP_BLESSING_STRING,
+                        DATABASE), null);
+                Permissions permissions = computePermissionsFromBlessings(getPersonalBlessings());
 
                 try {
-                    VFutures.sync(db.create(getAppVContext(), null));
+                    VFutures.sync(db.create(getAppVContext(), permissions));
                 } catch (ExistException e) {
                     // This is fine.
                 }
@@ -327,8 +330,12 @@ public class SyncbasePersistence implements Persistence {
             if (sUserCollection == null) {
                 Collection userCollection = sDatabase.getCollection(
                         new Id(getPersonalBlessingsString(), USER_COLLECTION_NAME));
+
+                Permissions permissions = Util.filterPermissionsByTags(
+                        computePermissionsFromBlessings(getPersonalBlessings()),
+                        ImmutableList.of(Constants.READ, Constants.WRITE, Constants.ADMIN));
                 try {
-                    VFutures.sync(userCollection.create(getAppVContext(), null));
+                    VFutures.sync(userCollection.create(getAppVContext(), permissions));
                 } catch (ExistException e) {
                     // This is fine.
                 }
@@ -340,11 +347,13 @@ public class SyncbasePersistence implements Persistence {
     private static final Object sCloudDatabaseMutex = new Object();
     private static Database sCloudDatabase;
 
+    // TODO(alexfandrianto): Remove. Cloud database creation shouldn't be done in the app.
     private static void ensureCloudDatabaseExists() {
         synchronized (sCloudDatabaseMutex) {
             if (sCloudDatabase == null) {
                 SyncbaseService cloudService = Syncbase.newService(CLOUD_NAME);
                 Database db = cloudService.getDatabase(getAppVContext(), DATABASE, null);
+
                 try {
                     VFutures.sync(db.create(getAppVContext()
                             .withTimeout(Duration.millis(SHORT_TIMEOUT)), null));
@@ -368,7 +377,9 @@ public class SyncbasePersistence implements Persistence {
                 String email = getEmailFromBlessings(clientBlessings);
                 Log.d(TAG, email);
 
-                Permissions permissions = computePermissionsFromBlessings(clientBlessings);
+                Permissions permissions = Util.filterPermissionsByTags(
+                        computePermissionsFromBlessings(clientBlessings),
+                        ImmutableList.of(Constants.READ, Constants.ADMIN));
 
                 String sgName = USER_COLLECTION_SYNCGROUP_SUFFIX + Math.abs(email.hashCode());
 
@@ -416,10 +427,12 @@ public class SyncbasePersistence implements Persistence {
     }
 
     private static String BLESSING_NAME_SEPARATOR = "___";
+
     public static String convertIdToString(Id id) {
         // Put the name first since it has a useful prefix for watch to switch on.
         return id.getName() + BLESSING_NAME_SEPARATOR + id.getBlessing();
     }
+
     public static Id convertStringToId(String idString) {
         String[] parts = idString.split(BLESSING_NAME_SEPARATOR);
         return new Id(parts[1], parts[0]);
