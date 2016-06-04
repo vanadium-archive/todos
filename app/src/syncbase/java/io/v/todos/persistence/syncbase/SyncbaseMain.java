@@ -119,7 +119,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         final Collection listCollection = getDatabase().getCollection(listId);
         Permissions permissions = Util.filterPermissionsByTags(
                 computePermissionsFromBlessings(getPersonalBlessings()),
-                ImmutableList.of(Constants.READ, Constants.WRITE, Constants.ADMIN));
+                io.v.v23.services.syncbase.Constants.ALL_COLLECTION_TAGS);
 
         Futures.addCallback(listCollection.create(getVContext(), permissions),
                 new SyncTrappingCallback<Void>() {
@@ -194,7 +194,7 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         final String sgName = computeListSyncgroupName(listName);
         Permissions permissions = Util.filterPermissionsByTags(
                 computePermissionsFromBlessings(getPersonalBlessings()),
-                ImmutableList.of(Constants.READ, Constants.ADMIN));
+                io.v.v23.services.syncbase.Constants.ALL_SYNCGROUP_TAGS);
 
         SyncgroupMemberInfo memberInfo = getDefaultMemberInfo();
 

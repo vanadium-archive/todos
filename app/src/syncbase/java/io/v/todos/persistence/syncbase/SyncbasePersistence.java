@@ -333,7 +333,7 @@ public class SyncbasePersistence implements Persistence {
 
                 Permissions permissions = Util.filterPermissionsByTags(
                         computePermissionsFromBlessings(getPersonalBlessings()),
-                        ImmutableList.of(Constants.READ, Constants.WRITE, Constants.ADMIN));
+                        io.v.v23.services.syncbase.Constants.ALL_COLLECTION_TAGS);
                 try {
                     VFutures.sync(userCollection.create(getAppVContext(), permissions));
                 } catch (ExistException e) {
@@ -379,7 +379,7 @@ public class SyncbasePersistence implements Persistence {
 
                 Permissions permissions = Util.filterPermissionsByTags(
                         computePermissionsFromBlessings(clientBlessings),
-                        ImmutableList.of(Constants.READ, Constants.ADMIN));
+                        io.v.v23.services.syncbase.Constants.ALL_SYNCGROUP_TAGS);
 
                 String sgName = USER_COLLECTION_SYNCGROUP_SUFFIX + Math.abs(email.hashCode());
 
