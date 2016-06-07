@@ -1,6 +1,9 @@
 <resources>
     <string name="app_name">Syncbase Todos</string>
     <string name="share_location">Share Presence</string>
+    <!-- For Sharing Presence Toasts -->
+    <string name="presence_on">Sharing Presence: ON</string>
+    <string name="presence_off">Sharing Presence: OFF</string>
     <!-- For Sharing Menu -->
     <string name="sharing_already">Shared With</string>
     <string name="sharing_possible">Available</string>

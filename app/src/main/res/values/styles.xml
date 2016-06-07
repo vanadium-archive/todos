@@ -17,4 +17,10 @@
 
     <style name="AppTheme.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
 
+    <style name="SwitchCompat" parent="Theme.AppCompat.Light">
+        <!-- Used to control the color of the SwitchCompat's track -->
+        <item name="colorControlActivated">@color/colorWhite</item>
+        <item name="android:colorForeground">@color/colorBlack</item>
+    </style>
+
 </resources>

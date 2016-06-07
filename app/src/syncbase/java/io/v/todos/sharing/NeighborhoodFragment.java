@@ -2,14 +2,19 @@ package io.v.todos.sharing;
 
 
 import android.app.Fragment;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v7.widget.SwitchCompat;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.widget.CompoundButton;
+import android.widget.Switch;
+import android.widget.Toast;
 
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
@@ -113,7 +118,7 @@ public class NeighborhoodFragment extends Fragment
         return sPrefs.getBoolean(PREF_ADVERTISE_NEIGHBORHOOD, true);
     }
 
-    private MenuItem mAdvertiseNeighborhoodMenuItem;
+    private SwitchCompat mSwitch;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -124,7 +129,15 @@ public class NeighborhoodFragment extends Fragment
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
         inflater.inflate(R.menu.neighborhood, menu);
-        mAdvertiseNeighborhoodMenuItem = menu.findItem(R.id.advertise_neighborhood);
+        MenuItem menuItem = menu.findItem(R.id.advertise_neighborhood);
+        mSwitch = (SwitchCompat) menuItem.getActionView().
+                findViewById(R.id.neighborhood_switch);
+        mSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                setAdvertiseNeighborhood(isChecked);
+            }
+        });
         sPrefs = sPrefs != null ? sPrefs : PreferenceManager.getDefaultSharedPreferences
                 (getActivity());
         sPrefs.registerOnSharedPreferenceChangeListener(this);
@@ -143,21 +156,20 @@ public class NeighborhoodFragment extends Fragment
         }
     }
 
+    private static Boolean sLastToastCheck; // Used to track the last toasted value.
+
     private void updateAdvertiseNeighborhoodChecked() {
         boolean value = isAdvertising();
-        mAdvertiseNeighborhoodMenuItem.setChecked(value);
-        mAdvertiseNeighborhoodMenuItem.setIcon(value ?
-                R.drawable.ic_advertise_neighborhood_on_white_24dp :
-                R.drawable.ic_advertise_neighborhood_off_white_24dp);
-    }
+        mSwitch.setChecked(value);
+        mSwitch.setThumbResource(value ?
+                R.drawable.sharing_activated_0_5x :
+                R.drawable.sharing_deactivated_0_5x);
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.advertise_neighborhood) {
-            setAdvertiseNeighborhood(!item.isChecked());
-            return true;
-        } else {
-            return super.onOptionsItemSelected(item);
+        // If this was a change, then toast information to the user.
+        if (sLastToastCheck == null || sLastToastCheck != value) {
+            sLastToastCheck = value;
+            Toast.makeText(getActivity(), value ?
+                    R.string.presence_on : R.string.presence_off, Toast.LENGTH_SHORT).show();
         }
     }
 }
