@@ -234,6 +234,11 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
                 // Modify the syncgroup spec to update the permissions.
                 Permissions perms = spec.getPerms();
                 addPermissions(perms, emails, Constants.READ.getValue());
+
+                // TODO(alexfandrianto): Revisit whether we should really be adding all invitees to
+                // the list of admins for this syncgroup. Since we manually hide the Share
+                // button from those who aren't the creator, we can leave this for the demo.
+                addPermissions(perms, emails, Constants.ADMIN.getValue());
                 VFutures.sync(sgHandle.setSpec(getVContext(), spec, version));
 
                 // TODO(alexfandrianto): This should be the right place to send the invite
