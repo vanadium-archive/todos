@@ -120,7 +120,6 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         Permissions permissions = Util.filterPermissionsByTags(
                 computePermissionsFromBlessings(getPersonalBlessings()),
                 io.v.v23.services.syncbase.Constants.ALL_COLLECTION_TAGS);
-
         Futures.addCallback(listCollection.create(getVContext(), permissions),
                 new SyncTrappingCallback<Void>() {
                     @Override

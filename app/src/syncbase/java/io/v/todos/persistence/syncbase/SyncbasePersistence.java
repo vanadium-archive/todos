@@ -89,6 +89,10 @@ import io.v.x.ref.lib.discovery.BadAdvertisementException;
  * TODO(rosswang): Move most of this to vanadium-android.
  */
 public class SyncbasePersistence implements Persistence {
+    public static final String LISTS_PREFIX = "lists_";
+    public static final String
+        LIST_COLLECTION_SYNCGROUP_PREFIX = "list_";
+
     private static final String
             TAG = "SyncbasePersistence",
             FILENAME = "syncbase",
@@ -96,11 +100,9 @@ public class SyncbasePersistence implements Persistence {
             DATABASE = "db",
             BLESSINGS_KEY = "blessings",
             USER_COLLECTION_SYNCGROUP_SUFFIX = "sg_",
-            LIST_COLLECTION_SYNCGROUP_SUFFIX = "list_",
             DEFAULT_APP_BLESSING_STRING = "dev.v" +
                     ".io:o:608941808256-43vtfndets79kf5hac8ieujto8837660" +
                     ".apps.googleusercontent.com";
-    protected static final String LISTS_PREFIX = "lists_";
     protected static final long
             SHORT_TIMEOUT = 2500,
             MEMBER_TIMER_DELAY = 100,
@@ -423,7 +425,7 @@ public class SyncbasePersistence implements Persistence {
     }
 
     protected static String computeListSyncgroupName(String listId) {
-        return LIST_COLLECTION_SYNCGROUP_SUFFIX + listId;
+        return LIST_COLLECTION_SYNCGROUP_PREFIX + listId;
     }
 
     private static String BLESSING_NAME_SEPARATOR = "___";
@@ -565,7 +567,7 @@ public class SyncbasePersistence implements Persistence {
         // TODO(alexfandrianto): If the cloud is dependent on me, then we must do this too.
         // VFutures.sync(ensureCloudDatabaseExists); // must finish before syncgroup setup
         ensureUserSyncgroupExists();
-        Sharing.initDiscovery(); // requires that db and collection exist
+        Sharing.initDiscovery(sDatabase); // requires that db and collection exist
         sInitialized = true;
     }
 
