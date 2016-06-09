@@ -82,6 +82,6 @@ dependencies {
             'com.google.guava:guava:19.0'
     )
     firebaseCompile 'com.firebase:firebase-client-android:2.5.2'
-    syncbaseCompile 'io.v:vanadium-android:2.1.+'
+    syncbaseCompile 'io.v:vanadium-android:2.2.+'
     syncbase2Compile 'io.v:syncbase:0.1.4'
 }
