@@ -3,6 +3,12 @@
     package="io.v.todos">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- TODO(alexfandrianto): We should include these permissions in syncbase instead -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
+                     android:maxSdkVersion="22"  />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+                     android:maxSdkVersion="22"  />
+
 
     <application
         android:allowBackup="true"

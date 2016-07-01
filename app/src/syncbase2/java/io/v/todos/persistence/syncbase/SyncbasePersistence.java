@@ -5,26 +5,27 @@
 package io.v.todos.persistence.syncbase;
 
 import android.app.Activity;
+import android.app.FragmentManager;
+import android.app.FragmentTransaction;
+import android.content.Context;
 import android.os.Bundle;
-import android.os.Handler;
+import android.support.annotation.CallSuper;
+import android.support.annotation.Nullable;
 import android.util.Log;
-
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-import io.v.android.VAndroidContexts;
-import io.v.android.security.BlessingsManager;
 import io.v.syncbase.Collection;
 import io.v.syncbase.Database;
 import io.v.syncbase.Syncbase;
 import io.v.syncbase.Id;
 
+import io.v.syncbase.Syncgroup;
+import io.v.syncbase.SyncgroupInvite;
 import io.v.syncbase.WatchChange;
+import io.v.syncbase.core.VError;
 import io.v.todos.model.ListMetadata;
 import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
@@ -32,18 +33,14 @@ import io.v.todos.model.TaskSpec;
 import io.v.todos.persistence.ListEventListener;
 import io.v.todos.persistence.Persistence;
 import io.v.todos.persistence.TodoListListener;
-import io.v.v23.VFutures;
-import io.v.v23.context.VContext;
-import io.v.v23.security.Blessings;
-import io.v.v23.verror.VException;
+import io.v.todos.sharing.NeighborhoodFragment;
+import io.v.todos.sharing.ShareListDialogFragment;
 
-public class SyncbasePersistence implements Persistence {
+public abstract class SyncbasePersistence implements Persistence {
     protected static final String SETTINGS_COLLECTION = "settings";
     protected static final String SHOW_DONE_KEY = "showDoneKey";
     protected static final String TODO_LIST_KEY = "todoListKey";
     protected static final String TAG = "High-Level Syncbase";
-
-    private static final String BLESSINGS_KEY = "blessings";
 
     protected static boolean sInitialized = false;
 
@@ -52,14 +49,16 @@ public class SyncbasePersistence implements Persistence {
     protected static final Map<Id, Map<String, TaskSpec>> sTasksByListMap = new HashMap<>();
     protected static boolean sShowDone = true;
 
-    protected Database mDb;
-    protected Collection mSettings;
+    protected static Database sDb;
+    protected static Collection sSettings;
 
     private static final Object sSyncbaseMutex = new Object();
-    private TodoListListener mTodoListListener;
-    private ListEventListener<ListMetadata> mMainListener;
+    private static TodoListListener sTodoListListener;
+    private static Id sTodoListExpectedId;
+    private static ListEventListener<ListMetadata> sMainListener;
 
-    public SyncbasePersistence(final Activity activity, Bundle savedInstanceState) {
+    SyncbasePersistence(final Activity activity, Bundle savedInstanceState) {
+        Log.d(TAG, "Trying to start Syncbase Persistence...");
         /**
          * Initializes Syncbase Server
          * Starts up a watch stream to watch all the data with methods to access/modify the data.
@@ -70,67 +69,54 @@ public class SyncbasePersistence implements Persistence {
             if (!sInitialized) {
                 Log.d(TAG, "Initializing Syncbase Persistence...");
 
-                Syncbase.DatabaseOptions dbOpts = new Syncbase.DatabaseOptions();
-                dbOpts.rootDir = activity.getFilesDir().getAbsolutePath();
-                dbOpts.disableUserdataSyncgroup = true;
-                dbOpts.vContext = VAndroidContexts.withDefaults(activity,
-                        savedInstanceState).getVContext();
+                Syncbase.Options opts = new Syncbase.Options();
+                opts.rootDir = activity.getFilesDir().getAbsolutePath();
+                opts.disableSyncgroupPublishing = true;
+                // TODO(alexfandrianto): https://v.io/i/1375
+                opts.disableUserdataSyncgroup = true;
+                try {
+                    Syncbase.init(opts);
+                } catch (VError vError) {
+                    Log.e(TAG, "Failed to initialize", vError);
+                    return;
+                }
 
-                final VContext vContext = dbOpts.vContext;
+                final Object initializeMutex = new Object();
 
-                Log.d(TAG, "Done getting vanadium context!");
-
-                final SettableFuture<ListenableFuture<Blessings>> blessings =
-                        SettableFuture.create();
-                if (activity.getMainLooper().getThread() == Thread.currentThread()) {
-                    blessings.set(BlessingsManager.getBlessings(vContext, activity,
-                            BLESSINGS_KEY, true));
-                } else {
-                    new Handler(activity.getMainLooper()).post(new Runnable() {
+                Log.d(TAG, "Logging the user in!");
+                if (!Syncbase.isLoggedIn()) {
+                    Syncbase.loginAndroid(activity, new Syncbase.LoginCallback() {
                         @Override
-                        public void run() {
-                            blessings.set(BlessingsManager.getBlessings(vContext,
-                                    activity, BLESSINGS_KEY, true));
+                        public void onSuccess() {
+                            Log.d(TAG, "Successfully logged in!");
+                            try {
+                                sDb = Syncbase.database();
+                            } catch (VError vError) {
+                                Log.e(TAG, "Failed to create database", vError);
+                                callNotify();
+                                return;
+                            }
+                            continueSetup();
+                            sInitialized = true;
+                            Log.d(TAG, "Successfully initialized!");
+                            callNotify();
+                        }
+
+                        @Override
+                        public void onError(Throwable e) {
+                            Log.e(TAG, "Failed to login. :(", e);
+                            callNotify();
+                        }
+
+                        private void callNotify() {
+                            synchronized (initializeMutex) {
+                                initializeMutex.notify();
+                            }
                         }
                     });
                 }
 
-                try {
-                    VFutures.sync(Futures.dereference(blessings));
-                } catch (VException e) {
-                    Log.e(TAG, "Failed to get blessings", e);
-                }
-
-                Log.d(TAG, "Done getting blessings!");
-
-                final Object initializeMutex = new Object();
-
-                Syncbase.database(new Syncbase.DatabaseCallback() {
-                    @Override
-                    public void onSuccess(Database db) {
-                        super.onSuccess(db);
-                        Log.d(TAG, "Got a db handle!");
-                        mDb = db;
-                        continueSetup();
-                        sInitialized = true;
-                        Log.d(TAG, "Successfully initialized!");
-                        synchronized (initializeMutex) {
-                            initializeMutex.notify();
-                        }
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        super.onError(e);
-
-                        Log.e(TAG, "Failed to get database handle", e);
-                        synchronized (initializeMutex) {
-                            initializeMutex.notify();
-                        }
-                    }
-                }, dbOpts);
-
-                Log.d(TAG, "Let's wait until the database is ready...");
+                Log.d(TAG, "Let's wait until we are logged in...");
                 synchronized (initializeMutex) {
                     try {
                         initializeMutex.wait();
@@ -139,28 +125,66 @@ public class SyncbasePersistence implements Persistence {
                     }
                 }
 
-                Log.d(TAG, "Syncbase Persistence initialization complete!");
+                if (sInitialized) {
+                    Log.d(TAG, "Syncbase Persistence initialization complete!");
+                } else {
+                    Log.d(TAG, "Syncbase Persistence initialization FAILED!");
+                    return;
+                }
             }
+        }
+
+        // Prepare the share presence menu fragment.
+        FragmentManager mgr = activity.getFragmentManager();
+        if (savedInstanceState == null) {
+            FragmentTransaction t = mgr.beginTransaction();
+            addFeatureFragments(mgr, activity, t);
+            t.commit();
+        } else {
+            addFeatureFragments(mgr, activity, null);
+        }
+    }
+
+    /**
+     * Hook to insert or rebind fragments.
+     *
+     * @param manager
+     * @param transaction the fragment transaction to use to add fragments, or null if fragments are
+     *                    being restored by the system.
+     */
+    @CallSuper
+    protected void addFeatureFragments(FragmentManager manager, Context context,
+                                       @Nullable FragmentTransaction transaction) {
+        if (transaction != null) {
+            NeighborhoodFragment fragment = new NeighborhoodFragment();
+            fragment.initSharePresence(context);
+            transaction.add(fragment, NeighborhoodFragment.FRAGMENT_TAG);
         }
     }
 
     private void continueSetup() {
         Log.d(TAG, "Creating settings collection");
         // Create a settings collection.
-        mSettings = mDb.collection(SETTINGS_COLLECTION);
+        try {
+            sSettings = sDb.collection(SETTINGS_COLLECTION);
+        } catch (VError vError) {
+            Log.e(TAG, "couldn't create settings collection", vError);
+        }
 
         Log.d(TAG, "Watching everything");
         // Watch everything.
-        mDb.addWatchChangeHandler(new Database.WatchChangeHandler() {
+        // TODO(alexfandrianto): This can be simplified if we watch specific collections and the
+        // entrance/exit of collections. https://v.io/i/1376
+        sDb.addWatchChangeHandler(new Database.WatchChangeHandler() {
             @Override
-            public void onInitialState(Iterator<WatchChange> values) {
+            public void onInitialState(final Iterator<WatchChange> values) {
                 while (values.hasNext()) {
                     handlePutChange(values.next());
                 }
             }
 
             @Override
-            public void onChangeBatch(Iterator<WatchChange> changes) {
+            public void onChangeBatch(final Iterator<WatchChange> changes) {
                 while (changes.hasNext()) {
                     WatchChange change = changes.next();
                     if (change.getChangeType() == WatchChange.ChangeType.DELETE) {
@@ -175,56 +199,84 @@ public class SyncbasePersistence implements Persistence {
             // being within a batch. Over-firing the listeners isn't ideal, but the app should be
             // okay.
             private void handlePutChange(WatchChange value) {
-                Id collectionId = value.getCollectionId();
+                Log.d(TAG, "Handling put change " + value.getRowKey());
+                Log.d(TAG, "From collection: " + value.getCollectionId());
+                Log.d(TAG, "With entity type: " + value.getEntityType());
+                if (value.getEntityType() != WatchChange.EntityType.ROW ||
+                        value.getCollectionId().getName().equals("userdata__")) {
+                    // TODO(alexfandrianto): I can't deal with these yet. Please skip to avoid crashing.
+                    // TODO(alexfandrianto): export/hide userdata__ https://v.io/i/1372
+                    return;
+                }
+                Log.d(TAG, "With row...: " + value.getRowKey());
+                final Id collectionId = value.getCollectionId();
 
                 if (collectionId.getName().equals(SETTINGS_COLLECTION)) {
                     if (value.getRowKey().equals(SHOW_DONE_KEY)) {
-                        sShowDone = (Boolean)value.getValue();
+                        try {
+                            sShowDone = value.getValue(Boolean.class);
+                            Log.d(TAG, "Got a show done" + sShowDone);
 
-                        // Inform the relevant listener.
-                        if (mTodoListListener != null) {
-                            mTodoListListener.onUpdateShowDone(sShowDone);
+                            // Inform the relevant listener.
+                            if (sTodoListListener != null) {
+                                sTodoListListener.onUpdateShowDone(sShowDone);
+                            }
+                        } catch (VError vError) {
+                            Log.e(TAG, "Failed to decode watch change as Boolean", vError);
                         }
                     }
+                    return; // Show done updated. Nothing left to do.
                 }
 
+                // If we are here, we must be modifying a todo list collection.
                 // Initialize the task spec map, if necessary.
                 if (sTasksByListMap.get(collectionId) == null) {
                     sTasksByListMap.put(collectionId, new HashMap<String, TaskSpec>());
                 }
 
                 if (value.getRowKey().equals(TODO_LIST_KEY)) {
-                    ListSpec listSpec = (ListSpec) value.getValue();
-                    sListSpecMap.put(collectionId, listSpec);
+                    try {
+                        final ListSpec listSpec = value.getValue(ListSpec.class);
+                        Log.d(TAG, "Got a list" + listSpec.toString());
+                        sListSpecMap.put(collectionId, listSpec);
 
-                    ListMetadataTracker tracker = getListMetadataTrackerSafe(collectionId);
-                    tracker.setSpec(listSpec);
+                        final ListMetadataTracker tracker = getListMetadataTrackerSafe(collectionId);
+                        tracker.setSpec(listSpec);
 
-                    // Inform the relevant listeners.
-                    if (mMainListener != null) {
-                        tracker.fireListener(mMainListener);
-                    }
-                    if (mTodoListListener != null) {
-                        mTodoListListener.onUpdate(listSpec);
+                        // Inform the relevant listeners.
+                        if (sMainListener != null) {
+                            tracker.fireListener(sMainListener);
+                        }
+                        if (sTodoListListener != null && sTodoListExpectedId.equals(collectionId)) {
+                            sTodoListListener.onUpdate(listSpec);
+                        }
+                    } catch (VError vError) {
+                        Log.e(TAG, "Failed to decode watch change value as ListSpec", vError);
                     }
                 } else {
                     Map<String, TaskSpec> taskData = sTasksByListMap.get(collectionId);
-                    TaskSpec newSpec = (TaskSpec)value.getValue();
-                    TaskSpec oldSpec = taskData.put(value.getRowKey(), newSpec);
+                    final String rowKey = value.getRowKey();
+                    try {
+                        final TaskSpec newSpec = value.getValue(TaskSpec.class);
+                        Log.d(TAG, "Got a task" + newSpec.toString());
+                        final TaskSpec oldSpec = taskData.put(rowKey, newSpec);
 
-                    ListMetadataTracker tracker = getListMetadataTrackerSafe(collectionId);
-                    tracker.adjustTask(value.getRowKey(), newSpec.getDone());
+                        final ListMetadataTracker tracker = getListMetadataTrackerSafe(collectionId);
+                        tracker.adjustTask(rowKey, newSpec.getDone());
 
-                    // Inform the relevant listeners.
-                    if (mMainListener != null) {
-                        tracker.fireListener(mMainListener);
-                    }
-                    if (mTodoListListener != null) {
-                        if (oldSpec == null) {
-                            mTodoListListener.onItemAdd(new Task(value.getRowKey(), newSpec));
-                        } else {
-                            mTodoListListener.onItemUpdate(new Task(value.getRowKey(), newSpec));
+                        // Inform the relevant listeners.
+                        if (sMainListener != null) {
+                            tracker.fireListener(sMainListener);
                         }
+                        if (sTodoListListener != null && sTodoListExpectedId.equals(collectionId)) {
+                            if (oldSpec == null) {
+                                sTodoListListener.onItemAdd(new Task(rowKey, newSpec));
+                            } else {
+                                sTodoListListener.onItemUpdate(new Task(rowKey, newSpec));
+                            }
+                        }
+                    } catch (VError vError) {
+                        Log.e(TAG, "Failed to decode watch change value as TaskSpec", vError);
                     }
                 }
             }
@@ -233,35 +285,44 @@ public class SyncbasePersistence implements Persistence {
             // being within a batch. Over-firing the listeners isn't ideal, but the app should be
             // okay.
             private void handleDeleteChange(WatchChange value) {
-                Id collectionId = value.getCollectionId();
-                String oldKey = value.getRowKey();
+                Log.d(TAG, "Handling delete change " + value.getRowKey());
+                Log.d(TAG, "From collection: " + value.getCollectionId());
+                Log.d(TAG, "With entity type: " + value.getEntityType());
+                if (value.getEntityType() != WatchChange.EntityType.ROW || value.getCollectionId().getName().equals("userdata__")) {
+                    // TODO(alexfandrianto): I can't deal with these yet. Please skip to avoid crashing.
+                    // TODO(alexfandrianto): export/hide userdata__ https://v.io/i/1372
+                    return;
+                }
+                Log.d(TAG, "With row...: " + value.getRowKey());
+
+                final Id collectionId = value.getCollectionId();
+                final String oldKey = value.getRowKey();
                 if (oldKey.equals(TODO_LIST_KEY)) {
                     sListSpecMap.remove(collectionId);
                     sListMetadataTrackerMap.remove(collectionId);
 
                     // TODO(alexfandrianto): Potentially destroy the collection too?
-
                     // Inform the relevant listeners.
-                    if (mMainListener != null) {
-                        mMainListener.onItemDelete(oldKey);
+                    if (sMainListener != null) {
+                        sMainListener.onItemDelete(collectionId.encode());
                     }
-                    if (mTodoListListener != null) {
-                        mTodoListListener.onDelete();
+                    if (sTodoListListener != null && sTodoListExpectedId.equals(collectionId)) {
+                        sTodoListListener.onDelete();
                     }
                 } else {
                     Map<String, TaskSpec> tasks = sTasksByListMap.get(collectionId);
                     if (tasks != null) {
                         tasks.remove(oldKey);
 
-                        ListMetadataTracker tracker = getListMetadataTrackerSafe(collectionId);
+                        final ListMetadataTracker tracker = getListMetadataTrackerSafe(collectionId);
                         tracker.removeTask(oldKey);
 
                         // Inform the relevant listeners.
-                        if (mMainListener != null) {
-                            tracker.fireListener(mMainListener);
+                        if (sMainListener != null) {
+                            tracker.fireListener(sMainListener);
                         }
-                        if (mTodoListListener != null) {
-                            mTodoListListener.onItemDelete(value.getRowKey());
+                        if (sTodoListListener != null && sTodoListExpectedId.equals(collectionId)) {
+                            sTodoListListener.onItemDelete(oldKey);
                         }
                     }
                 }
@@ -276,20 +337,17 @@ public class SyncbasePersistence implements Persistence {
         Log.d(TAG, "Accepting all invitations");
 
         // Automatically accept invitations.
-        // TODO(alexfandrianto): Uncomment. This part of the high-level API isn't implemented yet.
-        /*mDb.addSyncgroupInviteHandler(new Database.SyncgroupInviteHandler() {
+        sDb.addSyncgroupInviteHandler(new Database.SyncgroupInviteHandler() {
             @Override
             public void onInvite(SyncgroupInvite invite) {
-                mDb.acceptSyncgroupInvite(invite, new Database.AcceptSyncgroupInviteCallback() {
+                sDb.acceptSyncgroupInvite(invite, new Database.AcceptSyncgroupInviteCallback() {
                     @Override
                     public void onSuccess(Syncgroup sg) {
-                        super.onSuccess(sg);
                         Log.d(TAG, "Successfully joined syncgroup: " + sg.getId().toString());
                     }
 
                     @Override
                     public void onFailure(Throwable e) {
-                        super.onFailure(e);
                         Log.w(TAG, "Failed to accept invitation", e);
                     }
                 });
@@ -299,7 +357,10 @@ public class SyncbasePersistence implements Persistence {
             public void onError(Throwable e) {
                 Log.w(TAG, "error while handling invitations", e);
             }
-        }, new Database.AddSyncgroupInviteHandlerOptions());*/
+        }, new Database.AddSyncgroupInviteHandlerOptions());
+
+        // And do a background scan for peers near me.
+        ShareListDialogFragment.initScan();
     }
 
     public static boolean isInitialized() {
@@ -307,9 +368,7 @@ public class SyncbasePersistence implements Persistence {
     }
 
     @Override
-    public void close() {
-
-    }
+    public abstract void close();
 
     @Override
     public String debugDetails() {
@@ -317,17 +376,18 @@ public class SyncbasePersistence implements Persistence {
     }
 
     protected void setMainListener(ListEventListener<ListMetadata> listener) {
-        mMainListener = listener;
+        sMainListener = listener;
     }
     protected void removeMainListener() {
-        mMainListener = null;
+        sMainListener = null;
     }
 
-    protected void setTodoListListener(TodoListListener listener) {
-        mTodoListListener = listener;
+    protected void setTodoListListener(TodoListListener listener, Id expectedId) {
+        sTodoListListener = listener;
+        sTodoListExpectedId = expectedId;
     }
     protected void removeTodoListListener() {
-        mTodoListListener = null;
+        sTodoListListener = null;
     }
 
     private ListMetadataTracker getListMetadataTrackerSafe(Id listId) {
@@ -351,6 +411,9 @@ public class SyncbasePersistence implements Persistence {
         }
 
         ListMetadata computeListMetadata() {
+            if (spec == null) {
+                return null;
+            }
             return new ListMetadata(collectionId.encode(), spec, numCompleted,
                     taskCompletion.size());
         }
@@ -376,10 +439,14 @@ public class SyncbasePersistence implements Persistence {
         }
 
         void fireListener(ListEventListener<ListMetadata> listener) {
+            ListMetadata metadata = computeListMetadata();
+            if (metadata == null) {
+                return; // cannot fire yet
+            }
             if (!hasFired) {
+                hasFired = true;
                 listener.onItemAdd(computeListMetadata());
             } else {
-                hasFired = true;
                 listener.onItemUpdate(computeListMetadata());
             }
         }
