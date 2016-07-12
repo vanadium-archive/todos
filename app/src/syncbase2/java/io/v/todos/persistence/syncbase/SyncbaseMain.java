@@ -14,7 +14,7 @@ import io.v.syncbase.Collection;
 import io.v.syncbase.DatabaseHandle;
 import io.v.syncbase.Id;
 import io.v.syncbase.Syncbase;
-import io.v.syncbase.core.VError;
+import io.v.syncbase.exception.SyncbaseException;
 import io.v.todos.model.ListMetadata;
 import io.v.todos.model.ListSpec;
 import io.v.todos.persistence.ListEventListener;
@@ -40,14 +40,12 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
     public String addTodoList(ListSpec listSpec) {
         DatabaseHandle.CollectionOptions opts = new DatabaseHandle.CollectionOptions();
         try {
-            // TODO(alexfandrianto): We're not allowed to have dashes in our collection names still!
-            // You also must start with a letter, not a number.
-            Collection c = sDb.collection("list_" + UUID.randomUUID().toString().replaceAll("-", ""), opts);
+            Collection c = sDb.createCollection(opts.setPrefix(TODO_LIST_COLLECTION_PREFIX));
             c.put(TODO_LIST_KEY, listSpec);
             return c.getId().encode();
-        } catch (VError vError) {
-            Log.e(TAG, "Failed to create todo list collection", vError);
-            throw new RuntimeException(vError);
+        } catch (SyncbaseException e) {
+            Log.e(TAG, "Failed to create todo list collection", e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -57,8 +55,8 @@ public class SyncbaseMain extends SyncbasePersistence implements MainPersistence
         Collection c = sDb.getCollection(listId);
         try {
             c.delete(TODO_LIST_KEY);
-        } catch (VError vError) {
-            Log.e(TAG, "Failed to delete todo list key", vError);
+        } catch (SyncbaseException e) {
+            Log.e(TAG, "Failed to delete todo list key", e);
         }
         // TODO(alexfandrianto): Instead of deleting the key, we should destroy the collection.
         // Unfortunately, I can't yet: https://v.io/i/1374

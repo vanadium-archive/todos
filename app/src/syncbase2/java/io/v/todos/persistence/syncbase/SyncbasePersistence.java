@@ -25,7 +25,7 @@ import io.v.syncbase.Id;
 import io.v.syncbase.Syncgroup;
 import io.v.syncbase.SyncgroupInvite;
 import io.v.syncbase.WatchChange;
-import io.v.syncbase.core.VError;
+import io.v.syncbase.exception.SyncbaseException;
 import io.v.todos.model.ListMetadata;
 import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
@@ -37,9 +37,9 @@ import io.v.todos.sharing.NeighborhoodFragment;
 import io.v.todos.sharing.ShareListDialogFragment;
 
 public abstract class SyncbasePersistence implements Persistence {
-    protected static final String SETTINGS_COLLECTION = "settings";
     protected static final String SHOW_DONE_KEY = "showDoneKey";
     protected static final String TODO_LIST_KEY = "todoListKey";
+    protected static final String TODO_LIST_COLLECTION_PREFIX = "list";
     protected static final String TAG = "High-Level Syncbase";
 
     protected static boolean sInitialized = false;
@@ -50,7 +50,6 @@ public abstract class SyncbasePersistence implements Persistence {
     protected static boolean sShowDone = true;
 
     protected static Database sDb;
-    protected static Collection sSettings;
 
     private static final Object sSyncbaseMutex = new Object();
     private static TodoListListener sTodoListListener;
@@ -72,12 +71,10 @@ public abstract class SyncbasePersistence implements Persistence {
                 Syncbase.Options opts = new Syncbase.Options();
                 opts.rootDir = activity.getFilesDir().getAbsolutePath();
                 opts.disableSyncgroupPublishing = true;
-                // TODO(alexfandrianto): https://v.io/i/1375
-                opts.disableUserdataSyncgroup = true;
                 try {
                     Syncbase.init(opts);
-                } catch (VError vError) {
-                    Log.e(TAG, "Failed to initialize", vError);
+                } catch (SyncbaseException e) {
+                    Log.e(TAG, "Failed to initialize", e);
                     return;
                 }
 
@@ -91,8 +88,8 @@ public abstract class SyncbasePersistence implements Persistence {
                             Log.d(TAG, "Successfully logged in!");
                             try {
                                 sDb = Syncbase.database();
-                            } catch (VError vError) {
-                                Log.e(TAG, "Failed to create database", vError);
+                            } catch (SyncbaseException e) {
+                                Log.e(TAG, "Failed to create database", e);
                                 callNotify();
                                 return;
                             }
@@ -163,14 +160,6 @@ public abstract class SyncbasePersistence implements Persistence {
     }
 
     private void continueSetup() {
-        Log.d(TAG, "Creating settings collection");
-        // Create a settings collection.
-        try {
-            sSettings = sDb.collection(SETTINGS_COLLECTION);
-        } catch (VError vError) {
-            Log.e(TAG, "couldn't create settings collection", vError);
-        }
-
         Log.d(TAG, "Watching everything");
         // Watch everything.
         // TODO(alexfandrianto): This can be simplified if we watch specific collections and the
@@ -202,16 +191,14 @@ public abstract class SyncbasePersistence implements Persistence {
                 Log.d(TAG, "Handling put change " + value.getRowKey());
                 Log.d(TAG, "From collection: " + value.getCollectionId());
                 Log.d(TAG, "With entity type: " + value.getEntityType());
-                if (value.getEntityType() != WatchChange.EntityType.ROW ||
-                        value.getCollectionId().getName().equals("userdata__")) {
-                    // TODO(alexfandrianto): I can't deal with these yet. Please skip to avoid crashing.
-                    // TODO(alexfandrianto): export/hide userdata__ https://v.io/i/1372
+                if (value.getEntityType() != WatchChange.EntityType.ROW) {
+                    // TODO(alexfandrianto): I can't deal with non-row entities yet. Skip.
                     return;
                 }
                 Log.d(TAG, "With row...: " + value.getRowKey());
                 final Id collectionId = value.getCollectionId();
 
-                if (collectionId.getName().equals(SETTINGS_COLLECTION)) {
+                if (collectionId.getName().equals(Syncbase.USERDATA_NAME)) {
                     if (value.getRowKey().equals(SHOW_DONE_KEY)) {
                         try {
                             sShowDone = value.getValue(Boolean.class);
@@ -221,8 +208,8 @@ public abstract class SyncbasePersistence implements Persistence {
                             if (sTodoListListener != null) {
                                 sTodoListListener.onUpdateShowDone(sShowDone);
                             }
-                        } catch (VError vError) {
-                            Log.e(TAG, "Failed to decode watch change as Boolean", vError);
+                        } catch (SyncbaseException e) {
+                            Log.e(TAG, "Failed to decode watch change as Boolean", e);
                         }
                     }
                     return; // Show done updated. Nothing left to do.
@@ -250,8 +237,8 @@ public abstract class SyncbasePersistence implements Persistence {
                         if (sTodoListListener != null && sTodoListExpectedId.equals(collectionId)) {
                             sTodoListListener.onUpdate(listSpec);
                         }
-                    } catch (VError vError) {
-                        Log.e(TAG, "Failed to decode watch change value as ListSpec", vError);
+                    } catch (SyncbaseException e) {
+                        Log.e(TAG, "Failed to decode watch change value as ListSpec", e);
                     }
                 } else {
                     Map<String, TaskSpec> taskData = sTasksByListMap.get(collectionId);
@@ -275,8 +262,8 @@ public abstract class SyncbasePersistence implements Persistence {
                                 sTodoListListener.onItemUpdate(new Task(rowKey, newSpec));
                             }
                         }
-                    } catch (VError vError) {
-                        Log.e(TAG, "Failed to decode watch change value as TaskSpec", vError);
+                    } catch (SyncbaseException e) {
+                        Log.e(TAG, "Failed to decode watch change value as TaskSpec", e);
                     }
                 }
             }
@@ -288,9 +275,10 @@ public abstract class SyncbasePersistence implements Persistence {
                 Log.d(TAG, "Handling delete change " + value.getRowKey());
                 Log.d(TAG, "From collection: " + value.getCollectionId());
                 Log.d(TAG, "With entity type: " + value.getEntityType());
-                if (value.getEntityType() != WatchChange.EntityType.ROW || value.getCollectionId().getName().equals("userdata__")) {
-                    // TODO(alexfandrianto): I can't deal with these yet. Please skip to avoid crashing.
-                    // TODO(alexfandrianto): export/hide userdata__ https://v.io/i/1372
+                if (value.getEntityType() != WatchChange.EntityType.ROW ||
+                        value.getCollectionId().getName().equals(Syncbase.USERDATA_NAME)) {
+                    // TODO(alexfandrianto): I can't deal with non-row entities, and we don't need
+                    // to watch deletes from userdata.
                     return;
                 }
                 Log.d(TAG, "With row...: " + value.getRowKey());

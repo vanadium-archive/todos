@@ -23,7 +23,7 @@ import io.v.syncbase.Collection;
 import io.v.syncbase.Database;
 import io.v.syncbase.Id;
 import io.v.syncbase.User;
-import io.v.syncbase.core.VError;
+import io.v.syncbase.exception.SyncbaseException;
 import io.v.todos.model.ListSpec;
 import io.v.todos.model.Task;
 import io.v.todos.model.TaskSpec;
@@ -86,8 +86,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     public void updateTodoList(ListSpec listSpec) {
         try {
             mCollection.put(TODO_LIST_KEY, listSpec);
-        } catch (VError vError) {
-            Log.w(TAG, vError);
+        } catch (SyncbaseException e) {
+            Log.w(TAG, e);
         }
     }
 
@@ -95,8 +95,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     public void deleteTodoList() {
         try {
             mCollection.delete(TODO_LIST_KEY);
-        } catch (VError vError) {
-            Log.w(TAG, vError);
+        } catch (SyncbaseException e) {
+            Log.w(TAG, e);
         }
     }
 
@@ -118,14 +118,14 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
                         // TODO(alexfandrianto): If we're in a batch, it's okay to error, isn't it?
                         try {
                             bCollection.put(rowKey, newSpec);
-                        } catch (VError vError) {
-                            Log.w(TAG, vError);
+                        } catch (SyncbaseException e) {
+                            Log.w(TAG, e);
                         }
                     }
                 }
             }, new Database.BatchOptions());
-        } catch (VError vError) {
-            Log.w(TAG, vError);
+        } catch (SyncbaseException e) {
+            Log.w(TAG, e);
         }
     }
 
@@ -133,8 +133,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     public void addTask(TaskSpec task) {
         try {
             mCollection.put(UUID.randomUUID().toString(), task);
-        } catch (VError vError) {
-            Log.w(TAG, vError);
+        } catch (SyncbaseException e) {
+            Log.w(TAG, e);
         }
     }
 
@@ -142,8 +142,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     public void updateTask(Task task) {
         try {
             mCollection.put(task.key, task.toSpec());
-        } catch (VError vError) {
-            Log.w(TAG, vError);
+        } catch (SyncbaseException e) {
+            Log.w(TAG, e);
         }
     }
 
@@ -151,17 +151,17 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
     public void deleteTask(String key) {
         try {
             mCollection.delete(key);
-        } catch (VError vError) {
-            Log.w(TAG, vError);
+        } catch (SyncbaseException e) {
+            Log.w(TAG, e);
         }
     }
 
     @Override
     public void setShowDone(boolean showDone) {
         try {
-            sSettings.put(SHOW_DONE_KEY, showDone);
-        } catch (VError vError) {
-            Log.w(TAG, vError);
+            sDb.getUserdataCollection().put(SHOW_DONE_KEY, showDone);
+        } catch (SyncbaseException e) {
+            Log.w(TAG, e);
         }
     }
 
@@ -177,8 +177,8 @@ public class SyncbaseTodoList extends SyncbasePersistence implements TodoListPer
         }
         try {
             mCollection.getSyncgroup().inviteUsers(users, AccessList.AccessLevel.READ_WRITE);
-        } catch (VError vError) {
-            Log.w(TAG, "Could not share to: " + users.toString(), vError);
+        } catch (SyncbaseException e) {
+            Log.w(TAG, "Could not share to: " + users.toString(), e);
         }
     }
 }
