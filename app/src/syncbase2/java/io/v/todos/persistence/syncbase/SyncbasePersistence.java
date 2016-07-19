@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-import io.v.syncbase.Collection;
 import io.v.syncbase.Database;
 import io.v.syncbase.Syncbase;
 import io.v.syncbase.Id;
@@ -41,6 +40,13 @@ public abstract class SyncbasePersistence implements Persistence {
     protected static final String TODO_LIST_KEY = "todoListKey";
     protected static final String TODO_LIST_COLLECTION_PREFIX = "list";
     protected static final String TAG = "High-Level Syncbase";
+
+    // The todos app's cloud instance allocated by sb-allocator. All users share this cloud.
+    // To allocate your own cloud instance, go to https://sb-allocator.v.io/home
+    private static final String CLOUD_NAME =
+            "/(dev.v.io:r:vprod:service:mounttabled)@ns.dev.v.io:8101/sb/syncbased-e0cf21ca";
+    private static final String CLOUD_ADMIN = "dev.v.io:r:allocator:us:x:syncbased-e0cf21ca";
+    private static final String MOUNT_POINT = "/ns.dev.v.io:8101/tmp/todos/users/";
 
     protected static boolean sInitialized = false;
 
@@ -68,9 +74,11 @@ public abstract class SyncbasePersistence implements Persistence {
             if (!sInitialized) {
                 Log.d(TAG, "Initializing Syncbase Persistence...");
 
-                Syncbase.Options opts = new Syncbase.Options();
-                opts.rootDir = activity.getFilesDir().getAbsolutePath();
-                opts.disableSyncgroupPublishing = true;
+                String rootDir = activity.getFilesDir().getAbsolutePath();
+                Syncbase.Options opts =
+                        Syncbase.Options.cloudBuilder(rootDir, CLOUD_NAME, CLOUD_ADMIN)
+                                .setMountPoint(MOUNT_POINT)
+                                .build();
                 try {
                     Syncbase.init(opts);
                 } catch (SyncbaseException e) {
@@ -81,37 +89,34 @@ public abstract class SyncbasePersistence implements Persistence {
                 final Object initializeMutex = new Object();
 
                 Log.d(TAG, "Logging the user in!");
-                if (!Syncbase.isLoggedIn()) {
-                    Syncbase.loginAndroid(activity, new Syncbase.LoginCallback() {
-                        @Override
-                        public void onSuccess() {
-                            Log.d(TAG, "Successfully logged in!");
-                            try {
-                                sDb = Syncbase.database();
-                            } catch (SyncbaseException e) {
-                                Log.e(TAG, "Failed to create database", e);
-                                callNotify();
-                                return;
-                            }
+                Syncbase.loginAndroid(activity, new Syncbase.LoginCallback() {
+                    @Override
+                    public void onSuccess() {
+                        Log.d(TAG, "Successfully logged in!");
+                        try {
+                            sDb = Syncbase.database();
                             continueSetup();
                             sInitialized = true;
                             Log.d(TAG, "Successfully initialized!");
+                        } catch (SyncbaseException e) {
+                            Log.e(TAG, "Failed to create database", e);
+                        } finally {
                             callNotify();
                         }
+                    }
 
-                        @Override
-                        public void onError(Throwable e) {
-                            Log.e(TAG, "Failed to login. :(", e);
-                            callNotify();
-                        }
+                    @Override
+                    public void onError(Throwable e) {
+                        Log.e(TAG, "Failed to login. :(", e);
+                        callNotify();
+                    }
 
-                        private void callNotify() {
-                            synchronized (initializeMutex) {
-                                initializeMutex.notify();
-                            }
+                    private void callNotify() {
+                        synchronized (initializeMutex) {
+                            initializeMutex.notify();
                         }
-                    });
-                }
+                    }
+                });
 
                 Log.d(TAG, "Let's wait until we are logged in...");
                 synchronized (initializeMutex) {
@@ -320,7 +325,7 @@ public abstract class SyncbasePersistence implements Persistence {
             public void onError(Throwable e) {
                 Log.w(TAG, "error during watch", e);
             }
-        }, new Database.AddWatchChangeHandlerOptions());
+        });
 
         Log.d(TAG, "Accepting all invitations");
 
@@ -345,7 +350,7 @@ public abstract class SyncbasePersistence implements Persistence {
             public void onError(Throwable e) {
                 Log.w(TAG, "error while handling invitations", e);
             }
-        }, new Database.AddSyncgroupInviteHandlerOptions());
+        });
 
         // And do a background scan for peers near me.
         ShareListDialogFragment.initScan();

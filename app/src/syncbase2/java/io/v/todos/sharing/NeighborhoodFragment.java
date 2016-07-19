@@ -17,9 +17,6 @@ import android.widget.Toast;
 import io.v.syncbase.Syncbase;
 import io.v.syncbase.core.VError;
 import io.v.todos.R;
-import io.v.todos.persistence.syncbase.SyncbasePersistence;
-import io.v.v23.context.VContext;
-import io.v.v23.discovery.Advertisement;
 
 /**
  * A fragment encapsulating menu options and functionality related to list sharing.
@@ -61,11 +58,13 @@ public class NeighborhoodFragment extends Fragment
     private static void updateSharePresence() {
         if (shouldAdvertise()) {
             try {
-                Syncbase.advertiseLoggedInUserInNeighborhood();
+                if (!Syncbase.isAdvertisingLoggedInUserInNeighborhood()) {
+                    Syncbase.advertiseLoggedInUserInNeighborhood();
+                }
             } catch (VError vError) {
                 Log.w(FRAGMENT_TAG, "Failed to advertise logged in user", vError);
             }
-        } else {
+        } else if (Syncbase.isAdvertisingLoggedInUserInNeighborhood()) {
             Syncbase.stopAdvertisingLoggedInUserInNeighborhood();
         }
     }
